@@ -13,8 +13,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Script directory (where Dockerfile and shared volumes are)
-# Resolve symlinks to get the actual directory
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+SCRIPT_PATH="$0"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 IMAGE_NAME="claude-code"
 IMAGE_TAG="latest"
 
@@ -144,6 +147,8 @@ start_container() {
     # Create and start new container
     print_info "Creating new container: $container_name"
     print_info "Project: $project_path -> ~/$(basename "$project_path")"
+    
+    echo "Script dir: $SCRIPT_DIR"
     
     docker run -it \
         --name "$container_name" \
