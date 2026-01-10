@@ -28,12 +28,21 @@ cp ~/.claude.json container.claude.json
 ### 2. Build Docker Image
 
 ```bash
-./container.sh --build /path/to/any/project
+./container.sh --build
 ```
 
 Takes approximately 5 minutes.
 
 ### 3. Start Your Project
+
+Navigate to your project directory and run:
+
+```bash
+cd /path/to/your/project
+./container.sh
+```
+
+Or specify the path explicitly:
 
 ```bash
 ./container.sh /path/to/your/project
@@ -48,41 +57,48 @@ sudo ln -s "$(pwd)/container.sh" /usr/local/bin/claude-container
 ```
 
 Then you can run from any directory:
+
 ```bash
-claude-container /path/to/your/project
+cd /path/to/your/project
+claude-container          # Uses current directory
 claude-container --list
 ```
 
-To remove the global command later:
+Or specify a path explicitly:
+
 ```bash
-sudo rm /usr/local/bin/claude-container
+claude-container /path/to/your/project
 ```
 
 ## Usage
 
 **Start a project:**
 ```bash
-./container.sh /path/to/your/project
+cd /path/to/your/project
+claude-container
 ```
 
 **Inside the container:**
 ```bash
-cd ~/your-project
 claude-code
 npm install package-name
 pip install package-name
 exit
 ```
 
-All state is saved. Next time you run the script with the same project path, you'll resume where you left off.
+All state is saved. Next time you run the script from the same project directory, you'll resume where you left off.
 
 ## Common Commands
 
 ```bash
-./container.sh --list                    # List all containers
-./container.sh --stop /path/to/project   # Stop a container
-./container.sh --remove /path/to/project # Remove a container
-./container.sh --build /any/project      # Rebuild image
+claude-container --list           # List all containers
+claude-container --stop           # Stop the current project's container
+claude-container --remove         # Remove the current project's container
+claude-container --build          # Rebuild Docker image
+
+# Or with explicit path:
+claude-container --stop /path/to/project
+claude-container --remove /path/to/project
 ```
 
 ## What Persists

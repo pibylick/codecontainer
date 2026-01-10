@@ -41,12 +41,12 @@ print_error() {
 # Function to display usage
 usage() {
     cat << EOF
-Usage: $0 [OPTIONS] PROJECT_PATH
+Usage: $0 [OPTIONS] [PROJECT_PATH]
 
 Manage Claude Code Docker containers for isolated project environments.
 
 Arguments:
-    PROJECT_PATH    Absolute path to the project directory to work on
+    PROJECT_PATH    Path to the project directory (defaults to current directory)
 
 Options:
     -h, --help      Show this help message
@@ -57,9 +57,10 @@ Options:
     --clean         Remove all stopped Claude Code containers
 
 Examples:
+    $0                          # Uses current directory
     $0 /Users/kevin/my-project
-    $0 --build /Users/kevin/my-project
-    $0 --stop /Users/kevin/my-project
+    $0 --build
+    $0 --stop
     $0 --list
 
 EOF
@@ -133,14 +134,15 @@ start_container() {
     if container_running "$container_name"; then
         print_info "Container '$container_name' is already running"
         print_info "Attaching to container..."
-        docker exec -it "$container_name" /bin/bash
+        docker exec -it -w "/root/$project_name" "$container_name" /bin/bash
         return
     fi
     
     # If container exists but is stopped, start it
     if container_exists "$container_name"; then
         print_info "Starting existing container: $container_name"
-        docker start -i "$container_name"
+        docker start "$container_name"
+        docker exec -it -w "/root/$project_name" "$container_name" /bin/bash
         return
     fi
     
@@ -152,6 +154,7 @@ start_container() {
     
     docker run -it \
         --name "$container_name" \
+        -w "/root/$project_name" \
         -v "$project_path:/root/$project_name" \
         -v "$SCRIPT_DIR/.claude:/root/.claude" \
         -v "$SCRIPT_DIR/container.claude.json:/root/.claude.json" \
@@ -273,10 +276,9 @@ if [ "$CLEAN_FLAG" = true ]; then
     exit 0
 fi
 
-# Validate project path is provided for other operations
+# Default to current directory if PROJECT_PATH not provided
 if [ -z "$PROJECT_PATH" ]; then
-    print_error "PROJECT_PATH is required"
-    usage
+    PROJECT_PATH=$(pwd)
 fi
 
 # Convert to absolute path
