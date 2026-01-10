@@ -21,7 +21,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     zlib1g-dev \
     libffi-dev \
-    vim
+    vim \
+    tree
 
 # Install NVM (Node Version Manager) and Node.js
 ENV NVM_DIR=/root/.nvm
