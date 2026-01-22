@@ -219,7 +219,7 @@ list_containers() {
 # Function to clean up stopped containers
 clean_containers() {
     print_info "Removing all stopped Claude Code containers..."
-    docker container prune --filter "label=claude-code" -f
+    docker ps -a --filter "name=claude-" --quiet | xargs -r docker rm
     print_success "Cleanup complete"
 }
 
