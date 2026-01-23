@@ -1,5 +1,5 @@
-# Claude Code Autonomous Container
-# Generic Dockerfile for running Claude Code in isolated project environments
+# Code Container
+# Generic Dockerfile for running coding tools in isolated project environments
 
 FROM ubuntu:24.04
 
@@ -58,7 +58,7 @@ RUN npm install -g opencode-ai
 WORKDIR /root
 
 # Configure bash prompt to show container name
-RUN echo 'PS1="\[\033[01;32m\][claude-container]\[\033[00m\] \[\033[01;34m\]\w\[\033[00m\]\$ "' >> /root/.bashrc
+RUN echo 'PS1="\[\033[01;32m\][code-container]\[\033[00m\] \[\033[01;34m\]\w\[\033[00m\]\$ "' >> /root/.bashrc
 
 # Source NVM in bashrc for interactive shells
 RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.bashrc \

@@ -1,6 +1,6 @@
-# Claude Code Container
+# Code Container
 
-Isolated Docker environment for running Claude Code on projects with full system protection.
+Isolated Docker environment for running coding tools on projects with full system protection.
 
 ## Overview
 
@@ -51,24 +51,24 @@ Or specify the path explicitly:
 
 ### 4. (Optional) Install as Global Command
 
-To use `claude-container` from anywhere without the `./` prefix, create a symbolic link:
+To use `container` from anywhere without the `./` prefix, create a symbolic link:
 
 ```bash
-sudo ln -s "$(pwd)/container.sh" /usr/local/bin/claude-container
+sudo ln -s "$(pwd)/container.sh" /usr/local/bin/container
 ```
 
 Then you can run from any directory:
 
 ```bash
 cd /path/to/your/project
-claude-container          # Uses current directory
-claude-container --list
+container          # Uses current directory
+container --list
 ```
 
 Or specify a path explicitly:
 
 ```bash
-claude-container /path/to/your/project
+container /path/to/your/project
 ```
 
 ## Usage
@@ -76,7 +76,7 @@ claude-container /path/to/your/project
 **Start a project:**
 ```bash
 cd /path/to/your/project
-claude-container
+container
 ```
 
 **Inside the container:**
@@ -92,14 +92,14 @@ All state is saved. Next time you run the script from the same project directory
 ## Common Commands
 
 ```bash
-claude-container --list           # List all containers
-claude-container --stop           # Stop the current project's container
-claude-container --remove         # Remove the current project's container
-claude-container --build          # Rebuild Docker image
+container --list           # List all containers
+container --stop           # Stop the current project's container
+container --remove         # Remove the current project's container
+container --build          # Rebuild Docker image
 
 # Or with explicit path:
-claude-container --stop /path/to/project
-claude-container --remove /path/to/project
+container --stop /path/to/project
+container --remove /path/to/project
 ```
 
 ## What Persists
@@ -138,9 +138,9 @@ Both you and Claude Code can work on the project simultaneously:
 
 ## Container Naming
 
-Containers are named based on project path: `claude-{project-name}-{path-hash}`
+Containers are named based on project path: `code-{project-name}-{path-hash}`
 
-Example: `/Users/clippy/my-app` → `claude-my-app-a1b2c3d4`
+Example: `/Users/clippy/my-app` → `code-my-app-a1b2c3d4`
 
 Different containers for projects with the same name in different directories.
 
@@ -170,7 +170,7 @@ Edit `container.sh`:
 
 ## Tips
 
-- Use `./container.sh --list` regularly to track containers
+- Use `container --list` regularly to track containers
 - Remove containers for completed projects to save disk space
 - Back up `./.claude/` to preserve conversation history
 - Use `docker system prune -a` to clean up unused Docker data

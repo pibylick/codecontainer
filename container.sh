@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Claude Code Docker Container Manager
-# Manages isolated Docker containers for running Claude Code on different projects
+# Code Container Manager
+# Manages isolated Docker containers for running coding tools on different projects
 
 set -e
 
@@ -18,7 +18,7 @@ while [ -L "$SCRIPT_PATH" ]; do
     SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-IMAGE_NAME="claude-code"
+IMAGE_NAME="code"
 IMAGE_TAG="latest"
 
 # Function to print colored output
@@ -43,7 +43,7 @@ usage() {
     cat << EOF
 Usage: $0 [OPTIONS] [PROJECT_PATH]
 
-Manage Claude Code Docker containers for isolated project environments.
+Manage Code containers for isolated project environments.
 
 Arguments:
     PROJECT_PATH    Path to the project directory (defaults to current directory)
@@ -53,8 +53,8 @@ Options:
     -b, --build     Force rebuild the Docker image
     -s, --stop      Stop the container for this project
     -r, --remove    Remove the container for this project
-    -l, --list      List all Claude Code containers
-    --clean         Remove all stopped Claude Code containers
+    -l, --list      List all Code containers
+    --clean         Remove all stopped Code containers
 
 Examples:
     $0                          # Uses current directory
@@ -76,7 +76,7 @@ generate_container_name() {
     local project_name=$(basename "$project_path")
     # Create a hash of the full path for uniqueness
     local path_hash=$(echo -n "$project_path" | md5sum | cut -c1-8)
-    echo "claude-${project_name}-${path_hash}"
+    echo "code-${project_name}-${path_hash}"
 }
 
 # Function to check if Docker image exists
@@ -213,14 +213,14 @@ remove_container() {
 
 # Function to list containers
 list_containers() {
-    print_info "Claude Code Containers:"
-    docker ps -a --filter "name=claude-" --format "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
+    print_info "Code Containers:"
+    docker ps -a --filter "name=code-" --format "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
 }
 
 # Function to clean up stopped containers
 clean_containers() {
-    print_info "Removing all stopped Claude Code containers..."
-    docker ps -a --filter "name=claude-" --quiet | xargs -r docker rm
+    print_info "Removing all stopped Code containers..."
+    docker ps -a --filter "name=code-" --quiet | xargs -r docker rm
     print_success "Cleanup complete"
 }
 
