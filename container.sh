@@ -120,6 +120,7 @@ start_container() {
     
     # Create shared directories if they don't exist
     mkdir -p "$SCRIPT_DIR/.claude"
+    mkdir -p "$SCRIPT_DIR/.codex"
     mkdir -p "$SCRIPT_DIR/.npm"
     mkdir -p "$SCRIPT_DIR/pip"
     mkdir -p "$SCRIPT_DIR/.local"
@@ -159,6 +160,9 @@ start_container() {
         -v "$project_path:/root/$project_name" \
         -v "$SCRIPT_DIR/.claude:/root/.claude" \
         -v "$SCRIPT_DIR/container.claude.json:/root/.claude.json" \
+        -v "$SCRIPT_DIR/.codex:/root/.codex" \
+        -v "$SCRIPT_DIR/container.codex.json:/root/.codex/config.json" \
+        -v "$SCRIPT_DIR/container.codex.json:/root/.config/codex/config.json" \
         -v "$SCRIPT_DIR/container.opencode.json:/root/.config/opencode/config.json" \
         -v "$SCRIPT_DIR/.npm:/root/.npm" \
         -v "$SCRIPT_DIR/pip:/root/.cache/pip" \

@@ -1,0 +1,4 @@
+{
+  "apiKey": "sk-replace-with-your-openai-key",
+  "defaultModel": "gpt-4.1"
+}

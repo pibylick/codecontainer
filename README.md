@@ -13,17 +13,18 @@ Isolated Docker environment for running coding tools on projects with full syste
 
 - **Base**: Ubuntu 24.04 LTS with build essentials
 - **Runtimes**: Node.js 22 LTS (via NVM), Python 3 with pip
-- **Tools**: Claude Code, Opencode, git, curl, wget
+- **Tools**: Claude Code, Opencode, OpenAI Codex CLI, git, curl, wget
 - **Mounts**: `~/.gitconfig`, `~/.ssh` (read-only from host)
 - **Shared**: Claude history, npm cache, pip cache
 
 ## Initial Setup
 
-### 1. Configure Claude and Opencode
+### 1. Configure Claude, Opencode, and Codex
 
 ```bash
 cp ~/.claude.json container.claude.json
 cp ~/.config/opencode/config.json container.opencode.json
+cp ~/.codex/config.json container.codex.json    # Or your Codex CLI config path
 ```
 
 ### 2. Build Docker Image
@@ -82,6 +83,7 @@ container
 **Inside the container:**
 ```bash
 claude-code
+codex
 npm install package-name
 pip install package-name
 exit
@@ -111,6 +113,7 @@ container --remove /path/to/project
 
 **Shared Across All Projects:**
 - Claude configuration and conversation history
+- OpenAI Codex configuration/history
 - npm and pip download caches
 - Python user packages
 

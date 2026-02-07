@@ -54,6 +54,9 @@ RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 # Install Opencode
 RUN npm install -g opencode-ai
 
+# Install OpenAI Codex CLI
+RUN npm install -g @openai/codex
+
 # Set working directory to root home
 WORKDIR /root
 
