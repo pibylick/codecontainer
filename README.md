@@ -24,9 +24,26 @@ Isolated Docker environment for running coding tools on projects with full syste
 
 ## Initial Setup
 
-### 1. Configure Claude, OpenCode, and Codex
+### 1. Install as Global Command
 
-Copy your configuration directories into this repo so they are shared across containers:
+To use `container` from anywhere, create a symbolic link in a PATH-tracked folder:
+
+```bash
+ln -s "$(pwd)/container.sh" /usr/local/bin/container
+# Replace /usr/local/bin with any PATH tracked folder
+```
+
+Then you can run the `container` command from any directory:
+
+```bash
+cd /path/to/your/project
+container          # Uses current directory
+container --list
+```
+
+### 2. Configure Claude, OpenCode, and Codex
+
+Copy your configuration directories into this repo. These configuration directories are shared across containers:
 
 ```bash
 # Claude Code
@@ -40,81 +57,50 @@ cp -R ~/.codex ./.codex
 cp -R ~/.config/opencode ./.opencode
 ```
 
-These directories and the Claude JSON file will be shared with each code container. Modifications to these config files will persist across sessions and containers.
+### 3. Build Docker Image
 
-### 2. Build Docker Image
-
-```bash
-./container.sh --build
-```
-
-Takes approximately 5 minutes.
-
-### 3. Start Your Project
-
-Navigate to your project directory and run:
+Build the Docker container by running `container` with the `--build` flag:
 
 ```bash
-cd /path/to/your/project
-./container.sh
+container --build
 ```
 
-Or specify the path explicitly:
-
-```bash
-./container.sh /path/to/your/project
-```
-
-### 4. Install as Global Command
-
-To use `container` from anywhere, create a symbolic link in a PATH-tracked folder:
-
-```bash
-ln -s "$(pwd)/container.sh" /usr/local/bin/container
-```
-
-Then you can run from any directory:
-
-```bash
-cd /path/to/your/project
-container          # Uses current directory
-container --list
-```
-
-Or specify a path explicitly:
-
-```bash
-container /path/to/your/project
-```
+You only need to do this once or whenever you wish to rebuild the Docker image.
 
 ## Usage
 
-**Start a project:**
+After building, you can start working safely with containers.
+
+**Start a project:** To enter the container, navigate to the project directory and run `container`.
 ```bash
 cd /path/to/your/project
 container
 ```
 
-**Inside the container:**
+**Inside the container:** Once inside the container environment, you can now let your harness run loose!
 ```bash
-claude-code
+opencode
 codex
 npm install package-name
 pip install package-name
 exit
 ```
 
-All state is saved. Next time you run the script from the same project directory, you'll resume where you left off.
+All container state is saved. Next time you run the script from the same project directory, you'll resume in the same container where you left off.
+
+Conversations and settings for your harness will be shared across all containers.
 
 ## Common Commands
 
 ```bash
+container                  # Enter the container
 container --list           # List all containers
 container --stop           # Stop the current project's container
 container --remove         # Remove the current project's container
 container --build          # Rebuild Docker image
 
 # Or with explicit path:
+container /path/to/project
 container --stop /path/to/project
 container --remove /path/to/project
 ```
@@ -171,10 +157,12 @@ Edit `Dockerfile` and rebuild:
 RUN apt-get update && apt-get install -y postgresql-client redis-tools && rm -rf /var/lib/apt/lists/*
 ```
 
-**Change Shared Volumes:**
+**Add Shared Volumes:**
 
-Edit `container.sh`:
+Edit the `docker run -it` command inside `container.sh` to add more shared volumes:
 ```bash
+docker run -it \
+... \
 -v "$SCRIPT_DIR/new-shared-dir:/root/target-path" \
 ```
 
