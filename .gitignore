@@ -3,13 +3,12 @@
 .opencode/*
 .npm
 pip
-.local/*
+.local
 
 container.claude.json
 
 !.claude/.gitkeep
 !.codex/.gitkeep
 !.opencode/.gitkeep
-!.local/.gitkeep
 
 .dockerignore
