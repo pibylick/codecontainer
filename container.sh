@@ -64,7 +64,7 @@ Examples:
     $0 --list
 
 EOF
-    exit 1
+    exit 0
 }
 
 # Function to generate container name from project path
