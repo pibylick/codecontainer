@@ -1,6 +1,6 @@
 # Code Container
 
-Isolated Docker environment for running coding tools on projects with full system protection.
+Code Container: Isolated Docker environment for your autonomous coding harness.
 
 ## Overview
 
@@ -11,7 +11,7 @@ Isolated Docker environment for running coding tools on projects with full syste
 
 ## Prerequisites
 
-- **Docker** — [Install Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
+- **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
 - **A POSIX-Compatible System** — Linux, macOS, WSL
 
 ## Initial Setup
@@ -19,7 +19,6 @@ Isolated Docker environment for running coding tools on projects with full syste
 ### 1. Install as Global Command
 
 To use the `container` command from anywhere, create a symlink in a PATH-tracked folder:
-
 ```bash
 ln -s "$(pwd)/container.sh" /usr/local/bin/container
 ```
@@ -27,14 +26,12 @@ ln -s "$(pwd)/container.sh" /usr/local/bin/container
 ### 2. Configure Harnesses
 
 Copy configurations into this repo (shared across all containers):
-
 ```bash
 # Script to copy harness configs
 ./copy-configs.sh
 ```
 
-Or if copying manually:
-
+Or, if copying manually:
 ```bash
 # OpenCode
 cp -R ~/.config/opencode ./.opencode
@@ -50,16 +47,17 @@ cp -R ~/.claude ./.claude && cp ~/.claude.json container.claude.json
 container --build    # Run once, or when rebuilding
 ```
 
-**Includes**: Ubuntu 24.04 LTS, Node.js 22 LTS, Python 3, Claude Code, OpenCode, OpenAI Codex CLI, git
+**Includes**: Ubuntu 24.04 LTS, Node.js 22 LTS, Python 3, Claude Code, OpenCode, OpenAI Codex CLI, git. Add other tools by modifying the `Dockerfile`.
 
-## Usage
+## Primary Usage
 
+Navigate to any project and run `container` to mount the project and open the container.
 ```bash
 cd /path/to/your/project
 container                    # Enter container
 ```
 
-Inside the container:
+Inside the container: Start your harness and develop like normal.
 ```bash
 opencode                     # Start OpenCode
 codex                        # Start OpenAI Codex
@@ -99,7 +97,6 @@ sandbox_mode = "danger-full-access"
 }
 ```
 
-
 ## Common Commands
 
 ```bash
@@ -109,7 +106,7 @@ container --stop           # Stop current project's container
 container --remove         # Remove current project's container
 container --build          # Rebuild Docker image
 
-# With explicit path:
+# With an explicit path:
 container /path/to/project
 container --stop /path/to/project
 container --remove /path/to/project
@@ -134,11 +131,11 @@ container --remove /path/to/project
 
 You and your harness can work on the same project simultaneously.
 
-**Safe**: File editing, reading files, most development operations
+**Safe**: Reading files, editing files, most development operations
 
-**Avoid**: Git operations from both sides, installing conflicting `node_modules`
+**Avoid**: Simultaneous Git operations from both sides, installing conflicting `node_modules`
 
-**Recommended**: Let AI work autonomously in container while you work; review afterwards and commit.
+**Recommended Workflow**: Let your harness run autonomously in the container while you work; review changes and commit.
 
 ## Customization
 
@@ -147,22 +144,17 @@ You and your harness can work on the same project simultaneously.
 RUN apt-get update && apt-get install -y postgresql-client redis-tools && rm -rf /var/lib/apt/lists/*
 ```
 
-**Add shared volumes** — Edit `docker run -it` in `container.sh`:
+**Add shared volumes (caches, config, etc.)** — Edit the `docker run -it` command in `container.sh`:
 ```bash
 -v "$SCRIPT_DIR/new-shared-dir:/root/target-path"
 ```
 
 ## Security
 
-- Container runs as root with no network restrictions
 - SSH keys and Git config mounted read-only
-- Project isolation prevents cross-contamination
-- Host filesystem protected (no access outside mounted directories)
+- Project isolation prevents cross-contamination across containers
+- Host filesystem protected (access limited to mounted directories)
 
-## Tips
-
-```bash
-container --list          # Track containers
-container --remove        # Save disk space after project completion
-docker system prune -a    # Clean up unused Docker data
-```
+**Limitations:**
+- Network access still available; information may still be exfiltrated over network
+- Project files can still be deleted by harness; always use upstream version control
