@@ -1,6 +1,6 @@
 {
   "name": "code-container",
-  "version": "2.0.3",
+  "version": "2.0.6",
   "description": "Manage isolated Docker containers for running coding tools on different projects",
   "main": "dist/main.js",
   "bin": {
@@ -15,7 +15,9 @@
     "build": "tsc && chmod u+x dist/main.js",
     "clean": "rm -rf dist",
     "start": "node dist/main.js",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "publish-latest": "npm run clean && npm run build && npm publish",
+    "publish-nightly": "npm run clean && npm run build && npm publish --tag nightly"
   },
   "keywords": [
     "docker",
