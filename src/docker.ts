@@ -6,19 +6,37 @@ import { printInfo, printError } from "./utils";
 import { APPDATA_DIR, DOCKERFILE_PATH } from "./config";
 import { loadMounts } from "./mounts";
 import { loadFlags } from "./flags";
+import { CLI_BIN, isAppleContainer, runtimeDisplayName } from "./runtime";
 
 export const IMAGE_NAME = "code-container";
 export const IMAGE_TAG = "latest";
 const PACKAGED_DOCKERFILE = path.resolve(__dirname, "..", "Dockerfile");
 const CONTAINER_PREFIX = "container";
 
-export function checkDocker(): void {
-  const result = spawnSync("docker", ["info"], { stdio: "pipe" });
-  if (result.status !== 0) {
-    printError(
-      "Docker is not available. Please install Docker: https://docs.docker.com/get-docker/"
-    );
-    process.exit(1);
+export function checkRuntime(): void {
+  if (isAppleContainer()) {
+    const result = spawnSync(CLI_BIN, ["system", "version"], { stdio: "pipe" });
+    if (result.status !== 0) {
+      printInfo("Apple Container system not running. Starting...");
+      const startResult = spawnSync(CLI_BIN, ["system", "start"], {
+        stdio: "inherit",
+        timeout: 30000,
+      });
+      if (startResult.status !== 0) {
+        printError(
+          "Apple Container is not available. Please install it: https://github.com/apple/container"
+        );
+        process.exit(1);
+      }
+    }
+  } else {
+    const result = spawnSync(CLI_BIN, ["info"], { stdio: "pipe" });
+    if (result.status !== 0) {
+      printError(
+        "Docker is not available. Please install Docker: https://docs.docker.com/get-docker/"
+      );
+      process.exit(1);
+    }
   }
 }
 
@@ -43,7 +61,7 @@ export function generateContainerName(projectPath: string): string {
 
 export function imageExists(): boolean {
   const result = spawnSync(
-    "docker",
+    CLI_BIN,
     ["image", "inspect", `${IMAGE_NAME}:${IMAGE_TAG}`],
     { stdio: "pipe" }
   );
@@ -68,7 +86,7 @@ export function ensureDockerfile(): void {
 export function buildImageRaw(): boolean {
   ensureDockerfile();
   const result = spawnSync(
-    "docker",
+    CLI_BIN,
     ["build", "-t", `${IMAGE_NAME}:${IMAGE_TAG}`, APPDATA_DIR],
     { stdio: "inherit" }
   );
@@ -76,15 +94,36 @@ export function buildImageRaw(): boolean {
 }
 
 export function containerExists(containerName: string): boolean {
-  const result = spawnSync("docker", ["container", "inspect", containerName], {
+  if (isAppleContainer()) {
+    const result = spawnSync(CLI_BIN, ["inspect", containerName], {
+      stdio: "pipe",
+    });
+    return result.status === 0;
+  }
+  const result = spawnSync(CLI_BIN, ["container", "inspect", containerName], {
     stdio: "pipe",
   });
   return result.status === 0;
 }
 
 export function containerRunning(containerName: string): boolean {
+  if (isAppleContainer()) {
+    const result = spawnSync(
+      CLI_BIN,
+      ["inspect", "--format", "json", containerName],
+      { stdio: "pipe" }
+    );
+    if (result.status !== 0) return false;
+    try {
+      const data = JSON.parse(result.stdout.toString());
+      const status = Array.isArray(data) ? data[0]?.State?.Status : data?.State?.Status;
+      return status === "running";
+    } catch {
+      return false;
+    }
+  }
   const result = spawnSync(
-    "docker",
+    CLI_BIN,
     ["container", "inspect", "-f", "{{.State.Running}}", containerName],
     { stdio: "pipe" }
   );
@@ -92,15 +131,23 @@ export function containerRunning(containerName: string): boolean {
 }
 
 export function stopContainer(containerName: string): void {
-  spawnSync("docker", ["stop", "--timeout", "3", containerName], { stdio: "inherit" });
+  if (isAppleContainer()) {
+    spawnSync(CLI_BIN, ["stop", "--time", "3", containerName], { stdio: "inherit" });
+  } else {
+    spawnSync(CLI_BIN, ["stop", "--timeout", "3", containerName], { stdio: "inherit" });
+  }
 }
 
 export function startContainer(containerName: string): void {
-  spawnSync("docker", ["start", containerName], { stdio: "inherit" });
+  spawnSync(CLI_BIN, ["start", containerName], { stdio: "inherit" });
 }
 
 export function removeContainer(containerName: string): void {
-  spawnSync("docker", ["rm", containerName], { stdio: "inherit" });
+  if (isAppleContainer()) {
+    spawnSync(CLI_BIN, ["delete", containerName], { stdio: "inherit" });
+  } else {
+    spawnSync(CLI_BIN, ["rm", containerName], { stdio: "inherit" });
+  }
 }
 
 export function createNewContainer(
@@ -118,12 +165,14 @@ export function createNewContainer(
     args.push("-v", mount);
   }
 
-  const flags = loadFlags();
-  args.push(...flags);
+  if (!isAppleContainer()) {
+    const flags = loadFlags();
+    args.push(...flags);
+  }
 
   args.push(`${IMAGE_NAME}:${IMAGE_TAG}`, "sleep", "infinity");
 
-  const result = spawnSync("docker", args, { stdio: "inherit" });
+  const result = spawnSync(CLI_BIN, args, { stdio: "inherit" });
   return result.status === 0;
 }
 
@@ -132,7 +181,7 @@ export function execInteractive(
   projectName: string
 ): void {
   spawnSync(
-    "docker",
+    CLI_BIN,
     [
       "exec",
       "-it",
@@ -156,17 +205,18 @@ export function getOtherSessionCount(
   });
   if (result.status !== 0) return 0;
 
+  const execCmd = isAppleContainer() ? "container exec" : "docker exec";
   const lines = result.stdout.split("\n");
   let count = 0;
 
   for (const line of lines) {
-    const hasDockerExec = line.includes("docker exec");
+    const hasExec = line.includes(execCmd);
     const hasIt = line.includes("-it");
     const hasContainerName = line.includes(containerName);
     const hasBash = line.includes("/bin/bash");
     const hasWorkdir = line.includes(`-w /root/${projectName}`);
 
-    if (hasDockerExec && hasIt && hasContainerName && hasBash && hasWorkdir) {
+    if (hasExec && hasIt && hasContainerName && hasBash && hasWorkdir) {
       count++;
     }
   }
@@ -189,23 +239,71 @@ export function stopContainerIfLastSession(
 }
 
 export function listContainersRaw(): void {
-  spawnSync(
-    "docker",
-    [
-      "ps",
-      "-a",
-      "--filter",
-      `name=${CONTAINER_PREFIX}-`,
-      "--format",
-      "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
-    ],
-    { stdio: "inherit" }
-  );
+  if (isAppleContainer()) {
+    const result = spawnSync(CLI_BIN, ["list", "--format", "json"], {
+      encoding: "utf8",
+    });
+    if (result.status !== 0 || !result.stdout.trim()) return;
+    try {
+      const containers = JSON.parse(result.stdout);
+      const filtered = (Array.isArray(containers) ? containers : []).filter(
+        (c: { Name?: string; Names?: string }) => {
+          const name = c.Name || c.Names || "";
+          return name.startsWith(`${CONTAINER_PREFIX}-`);
+        }
+      );
+      if (filtered.length === 0) return;
+      console.log("NAMES\tSTATUS\tCREATED");
+      for (const c of filtered) {
+        const name = c.Name || c.Names || "";
+        const status = c.Status || c.State || "";
+        const created = c.CreatedAt || c.Created || "";
+        console.log(`${name}\t${status}\t${created}`);
+      }
+    } catch {
+      spawnSync(CLI_BIN, ["list"], { stdio: "inherit" });
+    }
+  } else {
+    spawnSync(
+      CLI_BIN,
+      [
+        "ps",
+        "-a",
+        "--filter",
+        `name=${CONTAINER_PREFIX}-`,
+        "--format",
+        "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
+      ],
+      { stdio: "inherit" }
+    );
+  }
 }
 
 export function getStoppedContainerIds(): string[] {
+  if (isAppleContainer()) {
+    const result = spawnSync(CLI_BIN, ["list", "--format", "json"], {
+      encoding: "utf8",
+    });
+    if (result.status !== 0 || !result.stdout.trim()) return [];
+    try {
+      const containers = JSON.parse(result.stdout);
+      return (Array.isArray(containers) ? containers : [])
+        .filter((c: { Name?: string; Names?: string; Status?: string; State?: string }) => {
+          const name = c.Name || c.Names || "";
+          const status = (c.Status || c.State || "").toLowerCase();
+          return (
+            name.startsWith(`${CONTAINER_PREFIX}-`) &&
+            (status === "exited" || status === "stopped")
+          );
+        })
+        .map((c: { Name?: string; Names?: string; Id?: string; ID?: string }) => c.Id || c.ID || c.Name || c.Names || "");
+    } catch {
+      return [];
+    }
+  }
+
   const result = spawnSync(
-    "docker",
+    CLI_BIN,
     [
       "ps",
       "-a",
@@ -225,5 +323,9 @@ export function getStoppedContainerIds(): string[] {
 }
 
 export function removeContainersById(ids: string[]): void {
-  spawnSync("docker", ["rm", ...ids], { stdio: "inherit" });
+  if (isAppleContainer()) {
+    spawnSync(CLI_BIN, ["delete", ...ids], { stdio: "inherit" });
+  } else {
+    spawnSync(CLI_BIN, ["rm", ...ids], { stdio: "inherit" });
+  }
 }

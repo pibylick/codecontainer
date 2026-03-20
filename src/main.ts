@@ -10,7 +10,7 @@ import {
   cleanContainers,
   init,
 } from "./commands";
-import { checkDocker } from "./docker";
+import { checkRuntime } from "./docker";
 import { loadSettings, saveSettings } from "./config";
 import { ensureMountsFile } from "./mounts";
 
@@ -134,7 +134,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  checkDocker();
+  checkRuntime();
   await init(true);
   const resolvedPath = resolveProjectPath(projectPath);
 

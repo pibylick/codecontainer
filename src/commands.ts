@@ -25,6 +25,7 @@ import {
   IMAGE_NAME,
   IMAGE_TAG,
 } from "./docker";
+import { runtimeDisplayName } from "./runtime";
 import {
   ensureConfigDir,
   loadSettings,
@@ -33,12 +34,12 @@ import {
 } from "./config";
 
 export function buildImage(): void {
-  printInfo(`Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}`);
+  printInfo(`Building ${runtimeDisplayName()} image: ${IMAGE_NAME}:${IMAGE_TAG}`);
   if (!buildImageRaw()) {
-    printError("Failed to build Docker image");
+    printError(`Failed to build ${runtimeDisplayName()} image`);
     process.exit(1);
   }
-  printSuccess("Docker image built successfully");
+  printSuccess(`${runtimeDisplayName()} image built successfully`);
 }
 
 export async function init(isStartup: boolean = false): Promise<void> {
@@ -101,7 +102,7 @@ export async function runContainer(projectPath: string): Promise<void> {
   ensureConfigDir();
 
   if (!imageExists()) {
-    printWarning("Docker image not found. Building...");
+    printWarning("Image not found. Building...");
     buildImage();
   }
 
