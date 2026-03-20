@@ -6,6 +6,7 @@ import {
   printWarning,
   printError,
   promptYesNo,
+  promptAgentSelection,
 } from "./utils";
 import {
   generateContainerName,
@@ -32,6 +33,7 @@ import {
   saveSettings,
   copyConfigs,
 } from "./config";
+import { AGENTS, applyPermissions } from "./agents";
 
 export function buildImage(): void {
   printInfo(`Building ${runtimeDisplayName()} image: ${IMAGE_NAME}:${IMAGE_TAG}`);
@@ -45,47 +47,69 @@ export function buildImage(): void {
 export async function init(isStartup: boolean = false): Promise<void> {
   const settings = loadSettings();
 
-  if (isStartup) {
-    // If startup: Check if completedInit, if not, prompt.
-    if (!settings.completedInit) {
-      printInfo("First run detected. Would you like to copy config files?");
-      printInfo(
-        "This will copy your OpenCode, Codex, Claude Code, & Gemini CLI configs to ~/.code-container/configs for mounting."
-      );
-      printInfo(
-        "If you choose to not copy config files, you can still setup your harness once inside the container."
-      );
+  // On startup, skip if already initialized
+  if (isStartup && settings.completedInit) {
+    return;
+  }
 
-      const shouldCopy = await promptYesNo("Copy config files?");
-      if (shouldCopy) {
-        copyConfigs();
-        printSuccess("Config files copied successfully");
-      } else {
-        printInfo("Ignoring copy. Run `codecontainer init` to copy.");
-      }
-    }
-    settings.completedInit = true;
-    saveSettings(settings);
-  } else {
-    // Else, not startup; user ran container init
-    if (!settings.completedInit) {
-      printInfo("Copying config files to ~/.code-container/configs...");
-      copyConfigs();
-      printSuccess("Config files copied successfully");
-
-      settings.completedInit = true;
-      saveSettings(settings);
-    } else {
-      printWarning(
-        "Config files already exist. This operation will merge and overwrite existing config files."
-      );
-      const shouldCopy = await promptYesNo("Continue?");
-      if (shouldCopy) {
-        copyConfigs();
-        printSuccess("Config files copied successfully");
-      }
+  // On explicit init with existing config, confirm overwrite
+  if (!isStartup && settings.completedInit) {
+    printWarning(
+      "Config files already exist. This operation will re-configure agents and overwrite existing config files."
+    );
+    if (!await promptYesNo("Continue?")) {
+      return;
     }
   }
+
+  // Agent selection
+  if (isStartup) {
+    printInfo("First run detected. Let's configure your container environment.");
+  }
+  const selectedAgents = await promptAgentSelection(AGENTS);
+  settings.agents = selectedAgents;
+
+  const agentNames = AGENTS
+    .filter(a => selectedAgents.includes(a.id))
+    .map(a => a.name)
+    .join(", ");
+  printInfo(`Selected agents: ${agentNames}`);
+
+  // Config copying
+  if (isStartup) {
+    printInfo(
+      "Would you like to copy config files for the selected agents to ~/.code-container/configs for mounting?"
+    );
+    printInfo(
+      "If you choose to not copy config files, you can still setup your harness once inside the container."
+    );
+    const shouldCopy = await promptYesNo("Copy config files?");
+    if (shouldCopy) {
+      copyConfigs(selectedAgents);
+      printSuccess("Config files copied successfully");
+    } else {
+      printInfo("Ignoring copy. Run `codecontainer init` to copy.");
+    }
+  } else {
+    printInfo("Copying config files to ~/.code-container/configs...");
+    copyConfigs(selectedAgents);
+    printSuccess("Config files copied successfully");
+  }
+
+  // Yolo mode
+  printInfo("");
+  printInfo("Enable full permissions for selected agents inside the container? (yolo mode)");
+  printInfo("This allows agents to execute commands without permission prompts.");
+  printInfo("Only affects the container environment, not your host system.");
+  const enableYolo = await promptYesNo("Enable yolo mode?");
+  settings.yolo = enableYolo;
+  if (enableYolo) {
+    applyPermissions(selectedAgents);
+    printSuccess("Full permissions configured for selected agents");
+  }
+
+  settings.completedInit = true;
+  saveSettings(settings);
 }
 
 export async function runContainer(projectPath: string): Promise<void> {

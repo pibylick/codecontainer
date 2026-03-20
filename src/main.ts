@@ -65,7 +65,7 @@ Commands:
     (none)         Start container for current directory (default)
     run            Start container for specified project path
     build          Build the container image
-    init           Copy config files from home directory
+    init           Select agents, copy config files, and configure permissions
     stop           Stop the container for this project
     remove         Remove the container for this project
     list           List all Code containers

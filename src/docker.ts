@@ -3,8 +3,9 @@ import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { printInfo, printError } from "./utils";
-import { APPDATA_DIR, DOCKERFILE_PATH } from "./config";
-import { loadMounts } from "./mounts";
+import { APPDATA_DIR, DOCKERFILE_PATH } from "./paths";
+import { loadSettings } from "./config";
+import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
 import { loadFlags } from "./flags";
 import { CLI_BIN, isAppleContainer, runtimeDisplayName } from "./runtime";
 
@@ -41,10 +42,12 @@ export function checkRuntime(): void {
 }
 
 export function getMounts(projectPath: string, projectName: string): string[] {
+  const settings = loadSettings();
   const mounts: string[] = [];
   mounts.push(`${projectPath}:/root/${projectName}`);
-  const fileMounts = loadMounts();
-  mounts.push(...fileMounts);
+  mounts.push(...getAgentMounts(settings.agents));
+  mounts.push(...getCommonMounts());
+  mounts.push(...loadUserMounts());
   return mounts;
 }
 
@@ -98,7 +101,14 @@ export function containerExists(containerName: string): boolean {
     const result = spawnSync(CLI_BIN, ["inspect", containerName], {
       stdio: "pipe",
     });
-    return result.status === 0;
+    if (result.status !== 0) return false;
+    // Apple container CLI returns exit 0 with empty "[]" for non-existent containers
+    try {
+      const data = JSON.parse(result.stdout.toString());
+      return Array.isArray(data) ? data.length > 0 : !!data;
+    } catch {
+      return false;
+    }
   }
   const result = spawnSync(CLI_BIN, ["container", "inspect", containerName], {
     stdio: "pipe",
@@ -245,19 +255,22 @@ export function listContainersRaw(): void {
     });
     if (result.status !== 0 || !result.stdout.trim()) return;
     try {
-      const containers = JSON.parse(result.stdout);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const containers: any[] = JSON.parse(result.stdout);
       const filtered = (Array.isArray(containers) ? containers : []).filter(
-        (c: { Name?: string; Names?: string }) => {
-          const name = c.Name || c.Names || "";
+        (c) => {
+          const name = c.configuration?.id || c.Name || c.Names || "";
           return name.startsWith(`${CONTAINER_PREFIX}-`);
         }
       );
       if (filtered.length === 0) return;
       console.log("NAMES\tSTATUS\tCREATED");
       for (const c of filtered) {
-        const name = c.Name || c.Names || "";
-        const status = c.Status || c.State || "";
-        const created = c.CreatedAt || c.Created || "";
+        const name = c.configuration?.id || c.Name || c.Names || "";
+        const status = c.status || c.Status || c.State || "";
+        const created = c.startedDate
+          ? new Date(c.startedDate * 1000).toISOString()
+          : c.CreatedAt || c.Created || "";
         console.log(`${name}\t${status}\t${created}`);
       }
     } catch {
@@ -286,17 +299,18 @@ export function getStoppedContainerIds(): string[] {
     });
     if (result.status !== 0 || !result.stdout.trim()) return [];
     try {
-      const containers = JSON.parse(result.stdout);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const containers: any[] = JSON.parse(result.stdout);
       return (Array.isArray(containers) ? containers : [])
-        .filter((c: { Name?: string; Names?: string; Status?: string; State?: string }) => {
-          const name = c.Name || c.Names || "";
-          const status = (c.Status || c.State || "").toLowerCase();
+        .filter((c) => {
+          const name = c.configuration?.id || c.Name || c.Names || "";
+          const status = (c.status || c.Status || c.State || "").toLowerCase();
           return (
             name.startsWith(`${CONTAINER_PREFIX}-`) &&
             (status === "exited" || status === "stopped")
           );
         })
-        .map((c: { Name?: string; Names?: string; Id?: string; ID?: string }) => c.Id || c.ID || c.Name || c.Names || "");
+        .map((c) => c.configuration?.id || c.Id || c.ID || c.Name || c.Names || "");
     } catch {
       return [];
     }
