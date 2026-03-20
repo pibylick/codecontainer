@@ -15,14 +15,14 @@
 
 ### Installation
 
-1. `container` is available as a NPM package. To install, simply run:
+1. `codecontainer` is available as a NPM package. To install, simply run:
     ```bash
     npm install -g code-container
     ```
 
 2. Then run the following to copy all your AI harness configs from `~/` to `~/.code-container/configs` for mounting onto the container.
     ```bash
-    container init
+    codecontainer init
     ```
     Alternatively, you can copy configs manually:
     - `~/.config/opencode` → `~/.code-container/configs/.opencode`
@@ -33,30 +33,30 @@
 
 3. Finally, build the Docker image. This may take up to 5 minutes.
     ```bash
-    container build
+    codecontainer build
     ```
 
-You're done 🎉; `container` is now ready to use.
+You're done 🎉; `codecontainer` is now ready to use.
 
 ### Migration from `container.sh`
 
 > [!Note]
-> Are you still on the shell script version of `container`? Migrate to the NPM package by running the following:
+> Are you still on the shell script version of `codecontainer`? Migrate to the NPM package by running the following:
 > ```bash
 > # Exit all containers & save important work...
 > npm install -g code-container
 > bash scripts/migrate.sh     # Migrate configs over to ~/.code-container/configs
 > bash scripts/cleanup.sh     # Optional: Cleanup config files
-> container build
+> codecontainer build
 > ```
 > Note: Ensure that all work is saved and the container is ready for deletion. Containers from the previous version are not compatible with containers from the current version.
 
 ## Usage
 
-Navigate to any project and run `container` to mount project and enter container.
+Navigate to any project and run `codecontainer` to mount project and enter container.
 ```bash
 cd /path/to/your/project
-container                    # Enter container
+codecontainer                # Enter container
 ```
 
 Inside the container: Start your harness and develop like normal.
@@ -71,14 +71,14 @@ Container state is saved. Next invocation resumes where you left off. AI convers
 ### Common Commands
 
 ```bash
-container                  # Enter the container
-container run /path/to     # Enter container for specific project
-container list             # List all containers
-container stop             # Stop current project's container
-container remove            # Remove current project's container
-container build            # Build Docker image
-container clean            # Remove all stopped containers
-container init             # Copy/recopy config files
+codecontainer                  # Enter the container
+codecontainer run /path/to     # Enter container for specific project
+codecontainer list             # List all containers
+codecontainer stop             # Stop current project's container
+codecontainer remove           # Remove current project's container
+codecontainer build            # Build container image
+codecontainer clean            # Remove all stopped containers
+codecontainer init             # Copy/recopy config files
 ```
 
 ## Features
@@ -143,9 +143,9 @@ Each line is parsed like a shell command. Empty lines and lines starting with `#
 - **Caution:** Network access is still available; information may still be exfiltrated over network
 
 #### ⚠️ Security Advisory:
-- The main purpose of `container` is to protect commands like `rm` or `apt` from unintentionally affecting your system.
-  - `container` assumes that your agent is acting in good faith.
-- `container` does not protect from prompt injections or network exfiltration in the event that an agent becomes malaligned.
+- The main purpose of `codecontainer` is to protect commands like `rm` or `apt` from unintentionally affecting your system.
+  - `codecontainer` assumes that your agent is acting in good faith.
+- `codecontainer` does not protect from prompt injections or network exfiltration in the event that an agent becomes malaligned.
   - Users are advised to not download or work with unverified software even within the container.
   - Sensitive information inside the container may still be exfiltrated by an attacker just as with your regular system. This includes:
     - OAuth credentials inside harness configs
@@ -167,7 +167,7 @@ You and multiple agents can work on the same project simultaneously.
 
 ## Uninstalling
 
-To uninstall `container`, uninstall the NPM package and remove `~/.code-container`:
+To uninstall `codecontainer`, uninstall the NPM package and remove `~/.code-container`:
 ```bash
 npm uninstall -g code-container
 rm -rf ~/.code-container

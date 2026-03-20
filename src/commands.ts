@@ -60,7 +60,7 @@ export async function init(isStartup: boolean = false): Promise<void> {
         copyConfigs();
         printSuccess("Config files copied successfully");
       } else {
-        printInfo("Ignoring copy. Run `container init` to copy.");
+        printInfo("Ignoring copy. Run `codecontainer init` to copy.");
       }
     }
     settings.completedInit = true;

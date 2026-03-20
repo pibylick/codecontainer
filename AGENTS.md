@@ -1,16 +1,16 @@
 **Important: Role Identification:** Identify whether your user is a **developer** or a **consumer**.
 
 If your user asks questions like:
-- Help me setup `container` / code-container / this project
+- Help me setup `codecontainer` / code-container / this project
 - Please configure all my container harnesses to run without permissions.
 - Add the following packages to the container environment: ...
 - Add the following Docker flags to the container environment: ...
 - Add a custom mount point to the container environment: ...
-- Other questions relating to using `container`
+- Other questions relating to using `codecontainer`
 
 Then your user is a **consumer**.
 - The user is seeking your assistance in helping them setup or configure this project.
-- Next step: **Read `internal/ConsumerGuide.md`** and assist the user in installing or configurating `container`.
+- Next step: **Read `internal/ConsumerGuide.md`** and assist the user in installing or configurating `codecontainer`.
 
 If your user is a developer, proceed like normal.
 
@@ -18,7 +18,7 @@ If your user is a developer, proceed like normal.
 
 # Developer Overview
 
-**code-container** (`container`) creates isolated Docker environments for AI coding harnesses (Claude Code, OpenCode, Codex CLI, Gemini CLI).
+**code-container** (`codecontainer`) creates isolated container environments for AI coding harnesses (Claude Code, OpenCode, Codex CLI, Gemini CLI).
 
 ## Purpose
 
@@ -36,7 +36,7 @@ If your user is a developer, proceed like normal.
 
 ## Requirements
 
-- Docker (Desktop or Engine)
+- Docker (Desktop or Engine) or Apple Container (macOS 26+, Apple Silicon)
 - POSIX system (Linux, macOS, WSL)
 
 ---
@@ -101,10 +101,10 @@ All user data stored in `~/.code-container/`:
 
 ## CLI Commands
 
-- `container [path]` — Run container for project (`commands.ts:runContainer`)
-- `container build` — Build Docker image (`commands.ts:buildImage`)
-- `container init` — Initialize config files (`commands.ts:init`)
-- `container stop` — Stop container (`commands.ts:stopContainerForProject`)
-- `container remove` — Remove container (`commands.ts:removeContainerForProject`)
-- `container list` — List all containers (`commands.ts:listContainers`)
-- `container clean` — Remove stopped containers (`commands.ts:cleanContainers`)
+- `codecontainer [path]` — Run container for project (`commands.ts:runContainer`)
+- `codecontainer build` — Build container image (`commands.ts:buildImage`)
+- `codecontainer init` — Initialize config files (`commands.ts:init`)
+- `codecontainer stop` — Stop container (`commands.ts:stopContainerForProject`)
+- `codecontainer remove` — Remove container (`commands.ts:removeContainerForProject`)
+- `codecontainer list` — List all containers (`commands.ts:listContainers`)
+- `codecontainer clean` — Remove stopped containers (`commands.ts:cleanContainers`)

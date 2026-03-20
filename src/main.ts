@@ -20,10 +20,10 @@ const TOS = `
 The main purpose of Code Container is to protect commands like 'rm' or 'apt'
 from unintentionally affecting your main system.
 
-container does not protect from prompt injections in the event that an agent
+codecontainer does not protect from prompt injections in the event that an agent
 becomes malaligned.
 
-This is an innate problem within coding harness software and container does
+This is an innate problem within coding harness software and codecontainer does
 not attempt to solve it.
 
 Users are advised to not download or work with unverified software.
@@ -57,14 +57,14 @@ async function ensureTosAccepted(): Promise<boolean> {
 
 function usage(): void {
   console.log(`
-Usage: container [COMMAND] [PROJECT_PATH]
+Usage: codecontainer [COMMAND] [PROJECT_PATH]
 
 Manage Code containers for isolated project environments.
 
 Commands:
     (none)         Start container for current directory (default)
     run            Start container for specified project path
-    build          Build the Docker image
+    build          Build the container image
     init           Copy config files from home directory
     stop           Stop the container for this project
     remove         Remove the container for this project
@@ -75,14 +75,14 @@ Arguments:
     PROJECT_PATH    Path to the project directory (defaults to current directory)
 
 Examples:
-    container                           # Start container for current directory
-    container run /path/to/project      # Start container for specific project
-    container build                     # Build Docker image
-    container init                      # Copy config files
-    container stop                      # Stop container for current directory
-    container remove /path/to/project   # Remove container for specific project
-    container list                      # List all containers
-    container clean                     # Clean up stopped containers
+    codecontainer                           # Start container for current directory
+    codecontainer run /path/to/project      # Start container for specific project
+    codecontainer build                     # Build container image
+    codecontainer init                      # Copy config files
+    codecontainer stop                      # Stop container for current directory
+    codecontainer remove /path/to/project   # Remove container for specific project
+    codecontainer list                      # List all containers
+    codecontainer clean                     # Clean up stopped containers
 `);
   process.exit(0);
 }
