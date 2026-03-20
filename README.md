@@ -99,6 +99,7 @@ Destructive actions are localized inside containers.
 > Don't want to customize manually? Clone this repo and ask your harness to customize for you.
 > ```
 > Add the following packages to the container environment: ...
+> Add the following Docker flags to the container environment: ...
 > Add a custom mount point to the container environment: ...
 > ```
 
@@ -116,6 +117,22 @@ RUN apt-get update && apt-get install -y postgresql-client redis-tools
 /absolute/path/on/host:/path/in/container
 /absolute/path/on/host:/path/in/container:ro
 ```
+
+**Adding Docker flags**: Edit `~/.code-container/DOCKER_FLAGS.txt` to pass additional flags to `docker run`:
+
+```
+# Port forwarding
+-p 4040:4040
+-p 3000:3000
+
+# Network mode
+--network host
+
+# GPU support
+--gpus all
+```
+
+Each line is parsed like a shell command. Empty lines and lines starting with `#` are ignored.
 
 ### Security
 
