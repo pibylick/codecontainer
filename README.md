@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/kevinMEH/code-container/main/.github/README/banner.png" alt="Banner" />
 </p>
 
-#### Code Container: Isolated Docker environment for your autonomous coding harness.
+#### Code Container: Isolated container environment for your autonomous coding harness.
 
 #### Simple. Lightweight. Secure.
 
@@ -10,7 +10,9 @@
 
 ### Prerequisites
 
-- **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
+- **Container Runtime** (one of):
+  - **Apple Container** (macOS 26+, Apple Silicon) — [github.com/apple/container](https://github.com/apple/container) — auto-detected
+  - **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine — used on Linux, WSL, or as fallback on macOS
 - **A POSIX-Compatible System** — Linux, macOS, WSL
 
 ### Installation
@@ -164,6 +166,21 @@ You and multiple agents can work on the same project simultaneously.
 
 - Changes within a container persists across sessions.
 - Harness configurations and configuration histories are shared across containers.
+
+### Runtime Detection
+
+`codecontainer` automatically detects the best container runtime:
+
+- **macOS (Apple Silicon)**: Uses Apple Container if installed, falls back to Docker
+- **Linux / WSL / other**: Uses Docker
+
+To override automatic detection, set the `CODE_CONTAINER_RUNTIME` environment variable:
+```bash
+CODE_CONTAINER_RUNTIME=docker codecontainer run .      # Force Docker on macOS
+CODE_CONTAINER_RUNTIME=apple-container codecontainer    # Force Apple Container
+```
+
+**Note:** `DOCKER_FLAGS.txt` is only loaded when using the Docker runtime.
 
 ## Uninstalling
 
