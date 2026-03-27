@@ -49,16 +49,22 @@ If your user is a developer, proceed like normal.
 
 ```
 /root/code-container/
-├── src/                    # TypeScript source code (main codebase)
-├── scripts/                # Utility scripts (install, migrate, cleanup)
-├── docs/plans/             # Historical plans and analysis documents
+├── src/                    # TypeScript source code
+├── scripts/                # Install/migration/cleanup helpers
 ├── dist/                   # Compiled JavaScript output (generated)
-├── .github/workflows/      # CI/CD workflows
+├── docs/                   # Plans and analysis documents
+│   └── plans/
+├── .github/                # GitHub metadata and workflows
+│   ├── README/
+│   └── workflows/
+├── internal/               # Currently unused; kept as a reserved docs location
+├── AGENTS.md               # Codex/agent instructions and project index
+├── CLAUDE.md               # Claude/Codex instruction shim
 ├── README.md               # User-facing documentation
 ├── Permissions.md          # Harness permission configuration reference
-├── CLAUDE.md               # Claude/Codex instruction shim
 ├── Dockerfile              # Container image definition
 ├── package.json            # NPM package manifest
+├── package-lock.json       # NPM lockfile
 └── tsconfig.json           # TypeScript configuration
 ```
 
