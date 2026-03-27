@@ -10,7 +10,7 @@ If your user asks questions like:
 
 Then your user is a **consumer**.
 - The user is seeking your assistance in helping them setup or configure this project.
-- Next step: **Read `internal/ConsumerGuide.md`** and assist the user in installing or configurating `codecontainer`.
+- Next step: **Read `README.md`** and assist the user in installing or configurating `codecontainer`.
 
 If your user is a developer, proceed like normal.
 
