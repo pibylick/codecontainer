@@ -10,19 +10,25 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/New_York
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# Install ca-certificates and add any custom CA certs from ~/.code-container/certs/
+RUN apt-get update && apt-get install -y ca-certificates
+COPY certs/ /usr/local/share/ca-certificates/custom/
+RUN update-ca-certificates
+
 # Install system dependencies and common build tools
-RUN apt-get update && apt-get install -y \
+RUN apt-get install -y \
     build-essential \
     git \
     curl \
     wget \
     unzip \
-    ca-certificates \
     libssl-dev \
     zlib1g-dev \
     libffi-dev \
     vim \
-    tree
+    tree \
+    tmux \
+    zsh
 
 # Install NVM (Node Version Manager) and Node.js
 ENV NVM_DIR=/root/.nvm
@@ -44,18 +50,32 @@ RUN apt-get update \
 # Create python symlink pointing to python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
+# Agent installation flags (set via --build-arg)
+ARG INSTALL_CLAUDE=1
+ARG INSTALL_OPENCODE=1
+ARG INSTALL_CODEX=1
+ARG INSTALL_GEMINI=1
+
 # Install Claude Code globally via official installer
-RUN curl -fsSL https://claude.ai/install.sh | bash
-RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+RUN if [ "$INSTALL_CLAUDE" = "1" ]; then \
+      curl -fsSL https://claude.ai/install.sh | bash; \
+    fi
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Install Opencode
-RUN npm install -g opencode-ai
+RUN if [ "$INSTALL_OPENCODE" = "1" ]; then \
+      npm install -g opencode-ai; \
+    fi
 
 # Install OpenAI Codex CLI
-RUN npm install -g @openai/codex
+RUN if [ "$INSTALL_CODEX" = "1" ]; then \
+      npm install -g @openai/codex; \
+    fi
 
 # Install Gemini CLI
-RUN npm install -g @google/gemini-cli
+RUN if [ "$INSTALL_GEMINI" = "1" ]; then \
+      npm install -g @google/gemini-cli; \
+    fi
 
 # Set working directory to root home
 WORKDIR /root
@@ -63,10 +83,22 @@ WORKDIR /root
 # Configure bash prompt to show container name
 RUN echo 'PS1="\[\033[01;32m\][code-container]\[\033[00m\] \[\033[01;34m\]\w\[\033[00m\]\$ "' >> /root/.bashrc
 
+# Ensure PATH includes tool directories (Apple Container doesn't inherit ENV from Dockerfile)
+RUN echo 'export PATH="/root/.local/bin:$PATH"' >> /root/.bashrc
+
 # Source NVM in bashrc for interactive shells
 RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.bashrc \
     && echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /root/.bashrc \
     && echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> /root/.bashrc
+
+# Configure zsh with same environment (Claude Code uses zsh as its shell)
+RUN echo 'export PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' >> /root/.zshrc \
+    && echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.zshrc \
+    && echo '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"' >> /root/.zshrc \
+    && echo 'PROMPT="%F{green}[code-container]%f %F{blue}%~%f$ "' >> /root/.zshrc
+
+# System-wide PATH so all shells (bash, zsh, sh) find installed tools
+RUN echo 'PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' > /etc/environment
 
 # Default command: bash shell
 CMD ["/bin/bash"]

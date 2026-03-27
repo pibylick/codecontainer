@@ -3,12 +3,11 @@ import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { printInfo, printError } from "./utils";
-import { APPDATA_DIR, DOCKERFILE_PATH } from "./paths";
+import { APPDATA_DIR, DOCKERFILE_PATH, APPLE_GIT_INJECT_PATH } from "./paths";
 import { loadSettings } from "./config";
 import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
 import { loadFlags } from "./flags";
 import { CLI_BIN, isAppleContainer, runtimeDisplayName } from "./runtime";
-import { APPLE_GIT_INJECT_PATH } from "./paths";
 
 export const IMAGE_NAME = "code-container";
 export const IMAGE_TAG = "latest";
@@ -84,12 +83,10 @@ export function ensureDockerfile(): void {
 }
 
 function ensureBuildAssets(): void {
-  const packageDir = path.resolve(__dirname, "..");
-  const certName = "AssecoBS-CA-G3.crt";
-  const src = path.join(packageDir, certName);
-  const dest = path.join(APPDATA_DIR, certName);
-  if (fs.existsSync(src)) {
-    fs.copyFileSync(src, dest);
+  // Ensure certs/ directory exists in build context (Dockerfile COPY requires it)
+  const certsDir = path.join(APPDATA_DIR, "certs");
+  if (!fs.existsSync(certsDir)) {
+    fs.mkdirSync(certsDir, { recursive: true, mode: 0o755 });
   }
 }
 

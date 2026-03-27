@@ -99,29 +99,31 @@ export function promptSelect<T extends string>(title: string, options: Array<{ l
   });
 }
 
-export function promptAgentSelection(agents: Array<{ id: string; name: string }>): Promise<string[]> {
-  const selected = new Array(agents.length).fill(true);
+export function promptMultiSelect(
+  title: string,
+  items: Array<{ id: string; name: string }>,
+  defaultSelected: boolean = true,
+): Promise<string[]> {
+  const selected = new Array(items.length).fill(defaultSelected);
   let cursor = 0;
 
   function render(): void {
-    // Move cursor up to overwrite previous render (except first render)
-    process.stdout.write(`\x1b[${agents.length + 2}A`);
+    process.stdout.write(`\x1b[${items.length + 2}A`);
     printMenu();
   }
 
   function printMenu(): void {
-    console.log("\nWhich agents would you like to use? (↑↓ navigate, space toggle, enter confirm)");
-    agents.forEach((agent, i) => {
+    console.log(`\n${title} (↑↓ navigate, space toggle, a toggle all, enter confirm)`);
+    items.forEach((item, i) => {
       const check = selected[i] ? "\x1b[32m✔\x1b[0m" : " ";
       const pointer = i === cursor ? "\x1b[36m❯\x1b[0m" : " ";
-      console.log(`  ${pointer} [${check}] ${agent.name}`);
+      console.log(`  ${pointer} [${check}] ${item.name}`);
     });
   }
 
   return new Promise((resolve) => {
     if (!process.stdin.isTTY) {
-      // Fallback for non-interactive: select all
-      resolve(agents.map(a => a.id));
+      resolve(defaultSelected ? items.map(a => a.id) : []);
       return;
     }
 
@@ -131,7 +133,6 @@ export function promptAgentSelection(agents: Array<{ id: string; name: string }>
     process.stdin.setEncoding("utf8");
 
     const onKey = (key: string): void => {
-      // Ctrl+C
       if (key === "\x03") {
         process.stdin.setRawMode(false);
         process.stdin.pause();
@@ -139,40 +140,32 @@ export function promptAgentSelection(agents: Array<{ id: string; name: string }>
         process.exit(0);
       }
 
-      // Enter
       if (key === "\r" || key === "\n") {
         process.stdin.setRawMode(false);
         process.stdin.pause();
         process.stdin.removeListener("data", onKey);
-        const result = agents
-          .filter((_, i) => selected[i])
-          .map(a => a.id);
-        resolve(result.length > 0 ? result : agents.map(a => a.id));
+        resolve(items.filter((_, i) => selected[i]).map(a => a.id));
         return;
       }
 
-      // Space — toggle
       if (key === " ") {
         selected[cursor] = !selected[cursor];
         render();
         return;
       }
 
-      // Arrow up / k
       if (key === "\x1b[A" || key === "k") {
-        cursor = (cursor - 1 + agents.length) % agents.length;
+        cursor = (cursor - 1 + items.length) % items.length;
         render();
         return;
       }
 
-      // Arrow down / j
       if (key === "\x1b[B" || key === "j") {
-        cursor = (cursor + 1) % agents.length;
+        cursor = (cursor + 1) % items.length;
         render();
         return;
       }
 
-      // 'a' — toggle all
       if (key === "a") {
         const allSelected = selected.every(Boolean);
         selected.fill(!allSelected);
@@ -183,4 +176,10 @@ export function promptAgentSelection(agents: Array<{ id: string; name: string }>
 
     process.stdin.on("data", onKey);
   });
+}
+
+export function promptAgentSelection(agents: Array<{ id: string; name: string }>): Promise<string[]> {
+  return promptMultiSelect("Which agents would you like to use?", agents, true).then(
+    result => result.length > 0 ? result : agents.map(a => a.id)
+  );
 }

@@ -30,13 +30,13 @@ import {
 import { injectGitConfigIntoContainer } from "./mounts";
 import { runtimeDisplayName } from "./runtime";
 import {
-  ensureConfigDir,
   loadSettings,
   saveSettings,
   copyConfigs,
   configsExist,
 } from "./config";
 import { AGENTS, applyPermissions } from "./agents";
+import { selectAndExportCerts, hasCerts } from "./certs";
 
 export async function buildImage(agentIds?: string[], memoryMB?: number): Promise<void> {
   if (!agentIds) {
@@ -135,6 +135,11 @@ export async function init(isStartup: boolean = false): Promise<void> {
   if (enableYolo) {
     applyPermissions(selectedAgents);
     printSuccess("Full permissions configured for selected agents");
+  }
+
+  // CA certificates
+  if (!hasCerts()) {
+    await selectAndExportCerts();
   }
 
   settings.completedInit = true;

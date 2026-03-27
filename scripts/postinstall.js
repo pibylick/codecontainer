@@ -8,6 +8,7 @@ const APPDATA_DIR = path.join(os.homedir(), ".code-container");
 const CONFIGS_DIR = path.join(APPDATA_DIR, "configs");
 const DOCKERFILE_PATH = path.join(APPDATA_DIR, "Dockerfile");
 const FLAGS_PATH = path.join(APPDATA_DIR, "DOCKER_FLAGS.txt");
+const CERTS_DIR = path.join(APPDATA_DIR, "certs");
 const PACKAGED_DOCKERFILE = path.join(__dirname, "..", "Dockerfile");
 
 if (!fs.existsSync(APPDATA_DIR)) {
@@ -25,10 +26,7 @@ if (!fs.existsSync(FLAGS_PATH)) {
   fs.writeFileSync(FLAGS_PATH, "# Add custom Docker flags here (one per line)\n# Example: -p 7777:7777\n");
 }
 
-// Copy bundled CA certificate if present
-const CERT_NAME = "AssecoBS-CA-G3.crt";
-const PACKAGED_CERT = path.join(__dirname, "..", CERT_NAME);
-const CERT_DEST = path.join(APPDATA_DIR, CERT_NAME);
-if (fs.existsSync(PACKAGED_CERT)) {
-  fs.copyFileSync(PACKAGED_CERT, CERT_DEST);
+// Ensure certs/ directory exists for custom CA certificates
+if (!fs.existsSync(CERTS_DIR)) {
+  fs.mkdirSync(CERTS_DIR, { recursive: true, mode: 0o755 });
 }
