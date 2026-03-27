@@ -190,6 +190,7 @@ export function createNewContainer(
   }
 
   args.push("-e", "TERM=xterm-256color");
+  args.push("-p", "3000:3000");
   args.push("-w", `/root/${projectName}`);
 
   for (const mount of mounts) {
