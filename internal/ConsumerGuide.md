@@ -1,6 +1,6 @@
 # Code Container (`codecontainer`)
 
-Repo: https://github.com/kevinMEH/code-container
+Repo: https://github.com/pibylick/codecontainer
 
 This file contains instructions for AI coding assistants on how to setup and customize `codecontainer` on behalf of users.
 

@@ -1,10 +1,8 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/kevinMEH/code-container/main/.github/README/banner.png" alt="Banner" />
-</p>
+# codecontainer
 
-#### Code Container: Isolated container environment for your autonomous coding harness.
+Isolated container environments for AI coding harnesses (Claude Code, OpenCode, Codex CLI, Gemini CLI).
 
-#### Simple. Lightweight. Secure.
+Supports **Docker** and **Apple Container** (macOS 26+) with automatic runtime detection.
 
 ## Quickstart
 
@@ -12,100 +10,66 @@
 
 - **Container Runtime** (one of):
   - **Apple Container** (macOS 26+, Apple Silicon) — [github.com/apple/container](https://github.com/apple/container) — auto-detected
-  - **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine — used on Linux, WSL, or as fallback on macOS
-- **A POSIX-Compatible System** — Linux, macOS, WSL
+  - **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
+- **Node.js** 18+
 
 ### Installation
 
-1. `codecontainer` is available as a NPM package. To install, simply run:
-    ```bash
-    npm install -g code-container
-    ```
+```bash
+npm install -g @pibylick/codecontainer
+```
 
-2. Then run the following to copy all your AI harness configs from `~/` to `~/.code-container/configs` for mounting onto the container.
-    ```bash
-    codecontainer init
-    ```
-    Alternatively, you can copy configs manually:
-    - `~/.config/opencode` → `~/.code-container/configs/.opencode`
-    - `~/.codex` → `~/.code-container/configs/.codex`
-    - `~/.claude` → `~/.code-container/configs/.claude`
-    - `~/.claude.json` → `~/.code-container/configs/.claude.json`
-    - `~/.gemini` → `~/.code-container/configs/.gemini`
+### Setup
 
-3. Finally, build the Docker image. This may take up to 5 minutes.
-    ```bash
-    codecontainer build
-    ```
+```bash
+codecontainer init    # Select agents, configure certs, copy configs
+codecontainer build   # Build container image
+```
 
-You're done 🎉; `codecontainer` is now ready to use.
+During `init`, you will:
+1. Choose which AI agents to install (Claude Code, OpenCode, Codex CLI, Gemini CLI)
+2. Copy harness configs from `~/` to `~/.code-container/configs/`
+3. Enable/disable yolo mode (full permissions inside container)
+4. Select CA certificates from your system keystore to include in the image
 
-### Migration from `container.sh`
+### Usage
 
-> [!Note]
-> Are you still on the shell script version of `codecontainer`? Migrate to the NPM package by running the following:
-> ```bash
-> # Exit all containers & save important work...
-> npm install -g code-container
-> bash scripts/migrate.sh     # Migrate configs over to ~/.code-container/configs
-> bash scripts/cleanup.sh     # Optional: Cleanup config files
-> codecontainer build
-> ```
-> Note: Ensure that all work is saved and the container is ready for deletion. Containers from the previous version are not compatible with containers from the current version.
-
-## Usage
-
-Navigate to any project and run `codecontainer` to mount project and enter container.
 ```bash
 cd /path/to/your/project
-codecontainer                # Enter container
+codecontainer              # Enter container for current directory
 ```
 
-Inside the container: Start your harness and develop like normal.
-```bash
-opencode                     # Start OpenCode
-npm install <package>        # Persists per container
-# ...
-```
+Inside the container, start your harness and develop as normal. Container state persists across sessions.
 
-Container state is saved. Next invocation resumes where you left off. AI conversations and settings persist across all projects.
-
-### Common Commands
+### Commands
 
 ```bash
 codecontainer                  # Enter the container
 codecontainer run /path/to     # Enter container for specific project
+codecontainer build            # Build container image
+codecontainer init             # Configure agents, certs, and permissions
+codecontainer sync             # Re-sync config files from host
 codecontainer list             # List all containers
 codecontainer stop             # Stop current project's container
 codecontainer remove           # Remove current project's container
-codecontainer build            # Build container image
 codecontainer clean            # Remove all stopped containers
-codecontainer init             # Copy/recopy config files
 ```
 
 ## Features
 
-### Unhindered Agents
+### Agent Selection
 
-> Don't want to configure manually? Clone this repo and ask your harness to configure for you.
-> ```
-> Please configure all my container harnesses to run without permissions.
-> ```
+Choose which AI coding agents to install during `init` and `build`. Only selected agents are installed in the container image, keeping it lean.
 
-Destructive actions are localized inside containers.
-- You can let your harness run with full permissions
-- To configure your harness to run without permissions, see [`Permissions.md`](Permissions.md).
+### CA Certificate Management
+
+During `init`, codecontainer extracts CA certificates from your OS trust store and lets you pick which to include:
+
+- **macOS**: Reads from System Keychain (`/Library/Keychains/System.keychain`)
+- **Windows**: Reads from Certificate Store (`Cert:\LocalMachine\Root`)
+- **Linux**: Place `.crt` files manually in `~/.code-container/certs/`
 
 ### Customization
-
-> Don't want to customize manually? Clone this repo and ask your harness to customize for you.
-> ```
-> Add the following packages to the container environment: ...
-> Add the following Docker flags to the container environment: ...
-> Add a custom mount point to the container environment: ...
-> ```
-
-Easily add your own tooling & mount points.
 
 **Adding tools/packages**: Edit `~/.code-container/Dockerfile` and rebuild:
 
@@ -113,80 +77,56 @@ Easily add your own tooling & mount points.
 RUN apt-get update && apt-get install -y postgresql-client redis-tools
 ```
 
-**Adding mount points**: Edit `~/.code-container/MOUNTS.txt` and reinitialize containers:
+**Adding mount points**: Edit `~/.code-container/MOUNTS.txt`:
 
 ```
 /absolute/path/on/host:/path/in/container
 /absolute/path/on/host:/path/in/container:ro
 ```
 
-**Adding Docker flags**: Edit `~/.code-container/DOCKER_FLAGS.txt` to pass additional flags to `docker run`:
+**Adding Docker flags**: Edit `~/.code-container/DOCKER_FLAGS.txt`:
 
 ```
-# Port forwarding
--p 4040:4040
 -p 3000:3000
-
-# Network mode
 --network host
-
-# GPU support
 --gpus all
 ```
 
-Each line is parsed like a shell command. Empty lines and lines starting with `#` are ignored.
-
-### Security
-
-- Host filesystem protected; destructive operations will only affect the container
-- Project isolation prevents cross-contamination across containers
-- **Note:** Git config and SSH keys are mounted read-only from host to support Git operations.
-- **Caution:** Project files can still be deleted by harness; always use upstream version control
-- **Caution:** Network access is still available; information may still be exfiltrated over network
-
-#### ⚠️ Security Advisory:
-- The main purpose of `codecontainer` is to protect commands like `rm` or `apt` from unintentionally affecting your system.
-  - `codecontainer` assumes that your agent is acting in good faith.
-- `codecontainer` does not protect from prompt injections or network exfiltration in the event that an agent becomes malaligned.
-  - Users are advised to not download or work with unverified software even within the container.
-  - Sensitive information inside the container may still be exfiltrated by an attacker just as with your regular system. This includes:
-    - OAuth credentials inside harness configs
-    - API keys inside harness configs
-    - SSH keys for git functionality
-
-### Simultaneous Work
-
-You and multiple agents can work on the same project simultaneously.
-
-- **Safe**: Reading files, editing files, most development operations
-- **Avoid**: Simultaneous Git operations from both sides, installing conflicting `node_modules`
-- **Recommended Workflow**: Let your harness run autonomously in the container while you work; review changes and commit.
-
-### Persistence
-
-- Changes within a container persists across sessions.
-- Harness configurations and configuration histories are shared across containers.
-
 ### Runtime Detection
 
-`codecontainer` automatically detects the best container runtime:
+Automatic detection of the best container runtime:
 
 - **macOS (Apple Silicon)**: Uses Apple Container if installed, falls back to Docker
 - **Linux / WSL / other**: Uses Docker
 
-To override automatic detection, set the `CODE_CONTAINER_RUNTIME` environment variable:
+Override with `CODE_CONTAINER_RUNTIME` env var:
 ```bash
-CODE_CONTAINER_RUNTIME=docker codecontainer run .      # Force Docker on macOS
-CODE_CONTAINER_RUNTIME=apple-container codecontainer    # Force Apple Container
+CODE_CONTAINER_RUNTIME=docker codecontainer          # Force Docker
+CODE_CONTAINER_RUNTIME=apple-container codecontainer  # Force Apple Container
 ```
 
-**Note:** `DOCKER_FLAGS.txt` is only loaded when using the Docker runtime.
+### Security
+
+- Host filesystem protected — destructive operations only affect the container
+- Project isolation prevents cross-contamination
+- Git config and SSH keys mounted read-only
+- Yolo mode (full agent permissions) only affects the container, not your host
+
+> **Note:** Network access is available inside containers. Do not work with unverified software. Sensitive information (OAuth tokens, API keys, SSH keys) may be exposed to code running inside the container.
+
+### Simultaneous Work
+
+Multiple agents/terminals can work on the same project simultaneously. Container stops automatically when the last session exits.
 
 ## Uninstalling
 
-To uninstall `codecontainer`, uninstall the NPM package and remove `~/.code-container`:
 ```bash
-npm uninstall -g code-container
+npm uninstall -g @pibylick/codecontainer
 rm -rf ~/.code-container
 ```
-Warning: Consider backing up the harness configurations in `~/.code-container/configs` before removing.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+Based on [code-container](https://github.com/kevinMEH/code-container) by Kevin Liao.
