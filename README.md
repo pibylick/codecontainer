@@ -71,10 +71,11 @@ During `init`, codecontainer extracts CA certificates from your OS trust store a
 
 ### Customization
 
-**Adding tools/packages**: Edit `~/.code-container/Dockerfile` and rebuild:
+**Adding tools/packages**: Edit `~/.code-container/extra_packages.apt` and rebuild. These packages are installed in the final build layer:
 
-```dockerfile
-RUN apt-get update && apt-get install -y postgresql-client redis-tools
+```text
+postgresql-client
+redis-tools
 ```
 
 **Adding mount points**: Edit `~/.code-container/MOUNTS.txt`:

@@ -30,7 +30,7 @@ If your user is a developer, proceed like normal.
 ## Key Features
 
 - **Security**: Destructive operations localized to containers
-- **Customization**: Add packages via `~/.code-container/Dockerfile`, mounts via `MOUNTS.txt`, flags via `DOCKER_FLAGS.txt`
+- **Customization**: Add packages via `~/.code-container/extra_packages.apt`, mounts via `MOUNTS.txt`, flags via `DOCKER_FLAGS.txt`
 - **Simultaneous Work**: Multiple agents can work on same project safely
 - **Persistence**: Container state and harness configs persist
 
@@ -47,14 +47,12 @@ If your user is a developer, proceed like normal.
 
 ## Directory Structure
 
-Stable repo structure (omitting local/generated directories such as `.git/`, `node_modules/`, `.claude/`, `.omc/`):
+Stable tracked repo structure (omitting local/generated/ignored directories such as `.git/`, `node_modules/`, `.claude/`, `.omc/`, `dist/`, `docs/plans/`, `internal/`):
 
 ```
 code-container/
 ├── src/                    # TypeScript source code
 ├── scripts/                # Install/migration/cleanup helpers
-├── docs/                   # Plans and analysis documents
-├── dist/                   # Compiled JavaScript output (generated)
 ├── .github/                # GitHub metadata and workflows
 ├── AGENTS.md               # Agent instructions and project index
 ├── CLAUDE.md               # Claude/Codex instruction shim
@@ -74,20 +72,20 @@ code-container/
 
 ### Core Modules
 
-- `src/paths.ts` — Shared path constants for the application data directory. No imports from other project modules (breaks circular deps). Exports: `APPDATA_DIR`, `CONFIGS_DIR`, `DOCKERFILE_PATH`, `SETTINGS_PATH`, `MOUNTS_PATH`, `FLAGS_PATH`
+- `src/paths.ts` — Shared path constants for the application data directory. No imports from other project modules (breaks circular deps). Exports: `APPDATA_DIR`, `CONFIGS_DIR`, `DOCKERFILE_PATH`, `EXTRA_PACKAGES_APT_PATH`, `SETTINGS_PATH`, `MOUNTS_PATH`, `FLAGS_PATH`
 - `src/agents.ts` — Agent registry and permissions. Defines supported AI agents (Claude Code, OpenCode, Codex CLI, Gemini CLI) with their config sources, mount mappings, and permission configs. Exports: `AGENTS`, `ALL_AGENT_IDS`, `AgentDefinition`, `PermissionConfig`, `getSelectedAgents`, `applyPermissions`
 - `src/certs.ts` — System certificate discovery and export. Lets users select CA certificates from the host keystore and writes them to `~/.code-container/certs/` for inclusion in the image. Exports: `SystemCert`, `getSystemCerts`, `selectAndExportCerts`, `hasCerts`
 - `src/commands.ts` — Business logic for all CLI commands. Image building, container lifecycle, listing, cleaning. Agent selection and yolo mode prompts during init. Exports: `buildImage`, `init`, `runContainer`, `stopContainerForProject`, `removeContainerForProject`, `listContainers`, `cleanContainers`
 - `src/runtime.ts` — Platform detection and runtime selection. Auto-detects Apple Container on macOS ARM64, falls back to Docker. Override via `CODE_CONTAINER_RUNTIME` env var. Exports: `runtime`, `CLI_BIN`, `isAppleContainer`, `runtimeDisplayName`
-- `src/docker.ts` — Low-level container CLI wrappers. Supports both Docker and Apple Container backends via runtime.ts. Image/container operations, interactive sessions, naming via SHA1 hash. Exports: `checkRuntime`, `imageExists`, `buildImageRaw`, `containerExists`, `containerRunning`, `createNewContainer`, `execInteractive`, `stopContainer`, `startContainer`, `removeContainer`, `generateContainerName`
-- `src/config.ts` — Configuration paths and settings persistence. Manages `~/.code-container/` directory. Settings include agent selection and yolo mode. Exports: `APPDATA_DIR`, `CONFIGS_DIR`, `DOCKERFILE_PATH`, `SETTINGS_PATH`, `MOUNTS_PATH`, `FLAGS_PATH`, `loadSettings`, `saveSettings`, `copyConfigs`, `ensureConfigDir`
+- `src/docker.ts` — Low-level container CLI wrappers. Supports both Docker and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs and `extra_packages.apt` exist, then handles image/container operations and naming via SHA1 hash.
+- `src/config.ts` — Configuration paths and settings persistence. Manages `~/.code-container/` directory. Settings include agent selection and yolo mode. Re-exports appdata paths including the generated Dockerfile and extra apt packages file path.
 - `src/mounts.ts` — Volume mount management. Agent mounts computed at runtime from selection, user mounts from MOUNTS.txt. Handles migration of old MOUNTS.txt format. Exports: `ensureMountsFile`, `loadUserMounts`, `getAgentMounts`, `getCommonMounts`
 - `src/flags.ts` — Custom Docker flags loader from `DOCKER_FLAGS.txt`. Uses shell-quote for safe parsing. Exports: `loadFlags`
 - `src/utils.ts` — Colored console output and interactive prompts. Exports include print helpers, selection prompts, and `resolveProjectPath`
 
 ## Scripts Index (`scripts/`)
 
-- `scripts/postinstall.js` — NPM post-install hook. Creates `~/.code-container/` structure and copies default Dockerfile.
+- `scripts/postinstall.js` — NPM post-install hook. Creates `~/.code-container/` structure, syncs the generated base Dockerfile, and initializes `extra_packages.apt`.
 - `scripts/migrate.sh` — Migrates config files from old shell script location to new `~/.code-container/configs/`.
 - `scripts/cleanup.sh` — Removes old config files from project root after migration.
 
@@ -104,7 +102,8 @@ All user data stored in `~/.code-container/`:
 │   ├── .gemini/
 │   ├── .local/
 │   └── .opencode/
-├── Dockerfile        # Custom Dockerfile
+├── Dockerfile        # Generated build Dockerfile synced from the package
+├── extra_packages.apt # User-defined apt packages installed in the final build layer
 ├── MOUNTS.txt        # Additional mount points
 ├── DOCKER_FLAGS.txt  # Additional docker run flags
 └── settings.json     # Internal settings

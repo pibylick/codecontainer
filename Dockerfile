@@ -6,8 +6,8 @@ FROM ubuntu:24.04
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Set timezone to America/New_York (EST)
-ENV TZ=America/New_York
+# Set timezone to Warsaw, Poland
+ENV TZ=Europe/Warsaw
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install ca-certificates and add any custom CA certs from ~/.code-container/certs/
@@ -33,7 +33,7 @@ RUN apt-get install -y \
 # Install NVM (Node Version Manager) and Node.js
 ENV NVM_DIR=/root/.nvm
 ENV NODE_VERSION=22
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash \
     && . "$NVM_DIR/nvm.sh" \
     && nvm install ${NODE_VERSION} \
     && nvm use ${NODE_VERSION} \
@@ -99,6 +99,15 @@ RUN echo 'export PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin
 
 # System-wide PATH so all shells (bash, zsh, sh) find installed tools
 RUN echo 'PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' > /etc/environment
+
+# Install user-defined extra apt packages as the final build layer
+COPY extra_packages.apt /tmp/extra_packages.apt
+RUN if [ -s /tmp/extra_packages.apt ]; then \
+      grep -v '^\s*#' /tmp/extra_packages.apt | grep -v '^\s*$' > /tmp/extra_packages.filtered; \
+      if [ -s /tmp/extra_packages.filtered ]; then \
+        apt-get update && xargs -r -a /tmp/extra_packages.filtered apt-get install -y; \
+      fi; \
+    fi
 
 # Default command: bash shell
 CMD ["/bin/bash"]

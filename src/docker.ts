@@ -3,7 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { printInfo, printError } from "./utils";
-import { APPDATA_DIR, DOCKERFILE_PATH, APPLE_GIT_INJECT_PATH } from "./paths";
+import { APPDATA_DIR, DOCKERFILE_PATH, EXTRA_PACKAGES_APT_PATH, APPLE_GIT_INJECT_PATH } from "./paths";
 import { loadSettings } from "./config";
 import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
 import { loadFlags } from "./flags";
@@ -87,6 +87,14 @@ function ensureBuildAssets(): void {
   const certsDir = path.join(APPDATA_DIR, "certs");
   if (!fs.existsSync(certsDir)) {
     fs.mkdirSync(certsDir, { recursive: true, mode: 0o755 });
+  }
+
+  // Ensure extra_packages.apt exists in build context (Dockerfile COPY requires it)
+  if (!fs.existsSync(EXTRA_PACKAGES_APT_PATH)) {
+    fs.writeFileSync(
+      EXTRA_PACKAGES_APT_PATH,
+      "# One apt package per line, e.g.:\n# postgresql-client\n# redis-tools\n"
+    );
   }
 }
 

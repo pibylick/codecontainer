@@ -6,7 +6,7 @@ import { APPDATA_DIR, CONFIGS_DIR, SETTINGS_PATH } from "./paths";
 import { AGENTS, ALL_AGENT_IDS, getSelectedAgents } from "./agents";
 
 export { APPDATA_DIR, CONFIGS_DIR, SETTINGS_PATH } from "./paths";
-export { DOCKERFILE_PATH, MOUNTS_PATH, FLAGS_PATH } from "./paths";
+export { DOCKERFILE_PATH, EXTRA_PACKAGES_APT_PATH, MOUNTS_PATH, FLAGS_PATH } from "./paths";
 
 const SettingsSchema = z.object({
   completedInit: z.boolean().default(false),
