@@ -8,6 +8,7 @@ import { loadSettings } from "./config";
 import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
 import { loadFlags } from "./flags";
 import { CLI_BIN, isAppleContainer, runtimeDisplayName } from "./runtime";
+import { APPLE_GIT_INJECT_PATH } from "./paths";
 
 export const IMAGE_NAME = "code-container";
 export const IMAGE_TAG = "latest";
@@ -72,27 +73,45 @@ export function imageExists(): boolean {
 }
 
 export function ensureDockerfile(): void {
-  if (!fs.existsSync(DOCKERFILE_PATH)) {
-    if (fs.existsSync(PACKAGED_DOCKERFILE)) {
-      printInfo(
-        `Dockerfile not found at ${DOCKERFILE_PATH}, copying from package...`
-      );
-      fs.copyFileSync(PACKAGED_DOCKERFILE, DOCKERFILE_PATH);
-    } else {
-      throw new Error(
-        `Dockerfile not found at ${DOCKERFILE_PATH} and no packaged Dockerfile available`
-      );
-    }
+  if (fs.existsSync(PACKAGED_DOCKERFILE)) {
+    fs.copyFileSync(PACKAGED_DOCKERFILE, DOCKERFILE_PATH);
+  } else if (!fs.existsSync(DOCKERFILE_PATH)) {
+    throw new Error(
+      `Dockerfile not found at ${DOCKERFILE_PATH} and no packaged Dockerfile available`
+    );
+  }
+  ensureBuildAssets();
+}
+
+function ensureBuildAssets(): void {
+  const packageDir = path.resolve(__dirname, "..");
+  const certName = "AssecoBS-CA-G3.crt";
+  const src = path.join(packageDir, certName);
+  const dest = path.join(APPDATA_DIR, certName);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
   }
 }
 
-export function buildImageRaw(): boolean {
+export function buildImageRaw(agentIds?: string[], memoryMB?: number): boolean {
   ensureDockerfile();
-  const result = spawnSync(
-    CLI_BIN,
-    ["build", "-t", `${IMAGE_NAME}:${IMAGE_TAG}`, APPDATA_DIR],
-    { stdio: "inherit" }
-  );
+  const args = ["build", "-t", `${IMAGE_NAME}:${IMAGE_TAG}`];
+  if (isAppleContainer()) {
+    args.push("-m", `${memoryMB || 4096}MB`);
+  }
+  if (agentIds) {
+    const agentBuildArgMap: Record<string, string> = {
+      claude: "INSTALL_CLAUDE",
+      opencode: "INSTALL_OPENCODE",
+      codex: "INSTALL_CODEX",
+      gemini: "INSTALL_GEMINI",
+    };
+    for (const [id, argName] of Object.entries(agentBuildArgMap)) {
+      args.push("--build-arg", `${argName}=${agentIds.includes(id) ? "1" : "0"}`);
+    }
+  }
+  args.push(APPDATA_DIR);
+  const result = spawnSync(CLI_BIN, args, { stdio: "inherit" });
   return result.status === 0;
 }
 
@@ -166,7 +185,12 @@ export function createNewContainer(
   projectPath: string
 ): boolean {
   const mounts = getMounts(projectPath, projectName);
+  const settings = loadSettings();
   const args = ["run", "-d", "--name", containerName];
+
+  if (isAppleContainer()) {
+    args.push("-m", `${settings.memoryMB || 4096}MB`);
+  }
 
   args.push("-e", "TERM=xterm-256color");
   args.push("-w", `/root/${projectName}`);
@@ -190,20 +214,24 @@ export function execInteractive(
   containerName: string,
   projectName: string
 ): void {
-  spawnSync(
-    CLI_BIN,
-    [
-      "exec",
-      "-it",
-      "-e",
-      "TERM=xterm-256color",
-      "-w",
-      `/root/${projectName}`,
-      containerName,
-      "/bin/bash",
-    ],
-    { stdio: "inherit" }
-  );
+  const args = [
+    "exec",
+    "-it",
+    "-e",
+    "TERM=xterm-256color",
+  ];
+
+  // Apple Container doesn't inherit ENV PATH from Dockerfile in exec sessions
+  if (isAppleContainer()) {
+    args.push("-e", "PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+    args.push("-e", "NVM_DIR=/root/.nvm");
+    args.push("-e", `GIT_CONFIG_GLOBAL=${APPLE_GIT_INJECT_PATH}/.gitconfig`);
+  }
+
+  args.push("-w", `/root/${projectName}`, containerName,
+    "/bin/bash");
+
+  spawnSync(CLI_BIN, args, { stdio: "inherit" });
 }
 
 export function getOtherSessionCount(
@@ -335,6 +363,7 @@ export function getStoppedContainerIds(): string[] {
 
   return containerIds.split("\n");
 }
+
 
 export function removeContainersById(ids: string[]): void {
   if (isAppleContainer()) {

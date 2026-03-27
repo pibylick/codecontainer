@@ -1,8 +1,9 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { z } from "zod";
 import { APPDATA_DIR, CONFIGS_DIR, SETTINGS_PATH } from "./paths";
-import { ALL_AGENT_IDS, getSelectedAgents } from "./agents";
+import { AGENTS, ALL_AGENT_IDS, getSelectedAgents } from "./agents";
 
 export { APPDATA_DIR, CONFIGS_DIR, SETTINGS_PATH } from "./paths";
 export { DOCKERFILE_PATH, MOUNTS_PATH, FLAGS_PATH } from "./paths";
@@ -12,6 +13,7 @@ const SettingsSchema = z.object({
   acceptedTos: z.boolean().default(false),
   agents: z.array(z.enum(ALL_AGENT_IDS as [string, ...string[]])).default(ALL_AGENT_IDS),
   yolo: z.boolean().default(false),
+  memoryMB: z.number().optional(),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -26,7 +28,7 @@ export function ensureAppdataDir(): void {
 
 export function loadSettings(): Settings {
   if (!fs.existsSync(SETTINGS_PATH)) {
-    return { completedInit: false, acceptedTos: false, agents: ALL_AGENT_IDS, yolo: false };
+    return { completedInit: false, acceptedTos: false, agents: ALL_AGENT_IDS, yolo: false, memoryMB: undefined };
   }
   const content = fs.readFileSync(SETTINGS_PATH, "utf-8");
   return SettingsSchema.parse(JSON.parse(content));
@@ -39,8 +41,32 @@ export function saveSettings(settings: Settings): void {
   });
 }
 
+// Directories inside ~/.claude that are not needed inside the container
+const SKIP_DIRS = new Set(["projects", "usage-data", "telemetry", ".git"]);
+
+export function configsExist(selectedAgentIds: string[]): boolean {
+  const agents = getSelectedAgents(selectedAgentIds);
+  for (const agent of agents) {
+    for (const { dest, isDir } of agent.configSources) {
+      const destPath = path.join(CONFIGS_DIR, dest);
+      if (!fs.existsSync(destPath)) return false;
+      if (isDir) {
+        // Check directory is not empty
+        try {
+          const entries = fs.readdirSync(destPath);
+          if (entries.length === 0) return false;
+        } catch {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 export function copyConfigs(selectedAgentIds: string[]): void {
   ensureConfigDir(selectedAgentIds);
+  cleanStaleAgentConfigs(selectedAgentIds);
 
   const agents = getSelectedAgents(selectedAgentIds);
   for (const agent of agents) {
@@ -48,10 +74,91 @@ export function copyConfigs(selectedAgentIds: string[]): void {
       const destPath = path.join(CONFIGS_DIR, dest);
       if (fs.existsSync(src)) {
         if (isDir) {
-          fs.cpSync(src, destPath, { recursive: true });
+          if (fs.existsSync(destPath)) {
+            fs.rmSync(destPath, { recursive: true });
+          }
+          fs.cpSync(src, destPath, {
+            recursive: true,
+            filter: (source) => {
+              const rel = path.relative(src, source);
+              const topDir = rel.split(path.sep)[0];
+              return !SKIP_DIRS.has(topDir);
+            },
+          });
         } else {
           fs.copyFileSync(src, destPath);
         }
+      }
+    }
+  }
+
+  rewriteHostPaths(selectedAgentIds);
+}
+
+/**
+ * Rewrite absolute host home paths to container home (/root) in copied config files.
+ * Plugins store installPath / installLocation with the host homedir baked in;
+ * inside the container these must point to /root instead.
+ */
+const CONTAINER_HOME = "/root";
+const PLUGIN_CONFIG_FILES = [
+  "plugins/installed_plugins.json",
+  "plugins/known_marketplaces.json",
+];
+
+function rewriteHostPaths(selectedAgentIds: string[]): void {
+  const hostHome = os.homedir();
+  if (hostHome === CONTAINER_HOME) return; // already matches, nothing to do
+
+  const agents = getSelectedAgents(selectedAgentIds);
+  for (const agent of agents) {
+    for (const { dest, isDir } of agent.configSources) {
+      if (!isDir) continue;
+      for (const relPath of PLUGIN_CONFIG_FILES) {
+        const filePath = path.join(CONFIGS_DIR, dest, relPath);
+        if (!fs.existsSync(filePath)) continue;
+        try {
+          const content = fs.readFileSync(filePath, "utf-8");
+          const rewritten = content.split(hostHome).join(CONTAINER_HOME);
+          if (rewritten !== content) {
+            fs.writeFileSync(filePath, rewritten, { mode: 0o600 });
+          }
+        } catch {
+          // Non-critical — skip if file can't be read/written
+        }
+      }
+    }
+  }
+}
+
+function cleanStaleAgentConfigs(selectedAgentIds: string[]): void {
+  const selected = getSelectedAgents(selectedAgentIds);
+  const deselected = AGENTS.filter(a => !selectedAgentIds.includes(a.id));
+
+  // Collect all paths owned by selected agents so we never remove them
+  const selectedPaths = new Set<string>();
+  for (const agent of selected) {
+    for (const { dest } of agent.configSources) {
+      selectedPaths.add(dest);
+    }
+    for (const mount of agent.mounts) {
+      selectedPaths.add(mount.hostDir);
+    }
+  }
+
+  for (const agent of deselected) {
+    const paths = [
+      ...agent.configSources.map(cs => cs.dest),
+      ...agent.mounts.map(m => m.hostDir),
+    ];
+    for (const rel of paths) {
+      if (selectedPaths.has(rel)) continue; // shared with a selected agent
+      const fullPath = path.join(CONFIGS_DIR, rel);
+      if (!fs.existsSync(fullPath)) continue;
+      if (fs.statSync(fullPath).isDirectory()) {
+        fs.rmSync(fullPath, { recursive: true });
+      } else {
+        fs.unlinkSync(fullPath);
       }
     }
   }

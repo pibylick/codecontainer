@@ -7,6 +7,7 @@ import {
   printError,
   promptYesNo,
   promptAgentSelection,
+  promptSelect,
 } from "./utils";
 import {
   generateContainerName,
@@ -26,18 +27,46 @@ import {
   IMAGE_NAME,
   IMAGE_TAG,
 } from "./docker";
+import { injectGitConfigIntoContainer } from "./mounts";
 import { runtimeDisplayName } from "./runtime";
 import {
   ensureConfigDir,
   loadSettings,
   saveSettings,
   copyConfigs,
+  configsExist,
 } from "./config";
 import { AGENTS, applyPermissions } from "./agents";
 
-export function buildImage(): void {
+export async function buildImage(agentIds?: string[], memoryMB?: number): Promise<void> {
+  if (!agentIds) {
+    printInfo("Select which agents to install in the container image:");
+    agentIds = await promptAgentSelection(AGENTS);
+    const agentNames = AGENTS
+      .filter(a => agentIds!.includes(a.id))
+      .map(a => a.name)
+      .join(", ");
+    printInfo(`Agents to install: ${agentNames}`);
+  }
+
+  if (memoryMB === undefined) {
+    const memChoice = await promptSelect("Container memory limit:", [
+      { label: "2 GB", value: "2048" },
+      { label: "4 GB (recommended)", value: "4096" },
+      { label: "6 GB", value: "6144" },
+      { label: "8 GB", value: "8192" },
+      { label: "16 GB", value: "16384" },
+    ], 1);
+    memoryMB = parseInt(memChoice, 10);
+  }
+
+  const settings = loadSettings();
+  settings.memoryMB = memoryMB;
+  saveSettings(settings);
+  printInfo(`Memory limit: ${memoryMB / 1024} GB`);
+
   printInfo(`Building ${runtimeDisplayName()} image: ${IMAGE_NAME}:${IMAGE_TAG}`);
-  if (!buildImageRaw()) {
+  if (!buildImageRaw(agentIds, memoryMB)) {
     printError(`Failed to build ${runtimeDisplayName()} image`);
     process.exit(1);
   }
@@ -123,11 +152,15 @@ export async function runContainer(projectPath: string): Promise<void> {
     process.exit(1);
   }
 
-  ensureConfigDir();
+  const settings = loadSettings();
+  if (!configsExist(settings.agents)) {
+    printInfo("Config files not found. Copying...");
+    copyConfigs(settings.agents);
+  }
 
   if (!imageExists()) {
     printWarning("Image not found. Building...");
-    buildImage();
+    await buildImage(settings.agents, settings.memoryMB);
   }
 
   if (containerRunning(containerName)) {
@@ -141,6 +174,7 @@ export async function runContainer(projectPath: string): Promise<void> {
   if (containerExists(containerName)) {
     printInfo(`Starting existing container: ${containerName}`);
     startContainer(containerName);
+    injectGitConfigIntoContainer(containerName);
     execInteractive(containerName, projectName);
     stopContainerIfLastSession(containerName, projectName);
     return;
@@ -154,6 +188,7 @@ export async function runContainer(projectPath: string): Promise<void> {
     process.exit(1);
   }
 
+  injectGitConfigIntoContainer(containerName);
   execInteractive(containerName, projectName);
   stopContainerIfLastSession(containerName, projectName);
   printSuccess("Container session ended");
@@ -197,6 +232,16 @@ export function removeContainerForProject(projectPath: string): void {
 export function listContainers(): void {
   printInfo("Code Containers:");
   listContainersRaw();
+}
+
+export function syncConfigs(): void {
+  const settings = loadSettings();
+  printInfo("Syncing config files to ~/.code-container/configs...");
+  copyConfigs(settings.agents);
+  if (settings.yolo) {
+    applyPermissions(settings.agents);
+  }
+  printSuccess("Config files synced successfully");
 }
 
 export function cleanContainers(): void {

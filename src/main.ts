@@ -8,6 +8,7 @@ import {
   removeContainerForProject,
   listContainers,
   cleanContainers,
+  syncConfigs,
   init,
 } from "./commands";
 import { checkRuntime } from "./docker";
@@ -66,6 +67,7 @@ Commands:
     run            Start container for specified project path
     build          Build the container image
     init           Select agents, copy config files, and configure permissions
+    sync           Re-sync config files from host to container configs
     stop           Stop the container for this project
     remove         Remove the container for this project
     list           List all Code containers
@@ -78,7 +80,8 @@ Examples:
     codecontainer                           # Start container for current directory
     codecontainer run /path/to/project      # Start container for specific project
     codecontainer build                     # Build container image
-    codecontainer init                      # Copy config files
+    codecontainer init                      # Configure agents and permissions
+    codecontainer sync                      # Re-sync config files from host
     codecontainer stop                      # Stop container for current directory
     codecontainer remove /path/to/project   # Remove container for specific project
     codecontainer list                      # List all containers
@@ -102,6 +105,7 @@ async function main(): Promise<void> {
       "run",
       "build",
       "init",
+      "sync",
       "stop",
       "remove",
       "list",
@@ -134,6 +138,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "sync") {
+    syncConfigs();
+    return;
+  }
+
   checkRuntime();
   await init(true);
   const resolvedPath = resolveProjectPath(projectPath);
@@ -146,7 +155,7 @@ async function main(): Promise<void> {
       cleanContainers();
       return;
     case "build":
-      buildImage();
+      await buildImage();
       return;
     case "stop":
       stopContainerForProject(resolvedPath);

@@ -28,7 +28,6 @@ export const AGENTS: AgentDefinition[] = [
     mounts: [
       { hostDir: ".claude", containerPath: "/root/.claude" },
       { hostDir: ".claude.json", containerPath: "/root/.claude.json" },
-      { hostDir: ".local", containerPath: "/root/.local" },
     ],
     permissionConfig: {
       filePath: ".claude/settings.json",
