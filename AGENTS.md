@@ -47,18 +47,16 @@ If your user is a developer, proceed like normal.
 
 ## Directory Structure
 
+Stable repo structure (omitting local/generated directories such as `.git/`, `node_modules/`, `.claude/`, `.omc/`):
+
 ```
-/root/code-container/
+code-container/
 ├── src/                    # TypeScript source code
 ├── scripts/                # Install/migration/cleanup helpers
-├── dist/                   # Compiled JavaScript output (generated)
 ├── docs/                   # Plans and analysis documents
-│   └── plans/
+├── dist/                   # Compiled JavaScript output (generated)
 ├── .github/                # GitHub metadata and workflows
-│   ├── README/
-│   └── workflows/
-├── internal/               # Currently unused; kept as a reserved docs location
-├── AGENTS.md               # Codex/agent instructions and project index
+├── AGENTS.md               # Agent instructions and project index
 ├── CLAUDE.md               # Claude/Codex instruction shim
 ├── README.md               # User-facing documentation
 ├── Permissions.md          # Harness permission configuration reference
