@@ -55,6 +55,7 @@ ARG INSTALL_CLAUDE=1
 ARG INSTALL_OPENCODE=1
 ARG INSTALL_CODEX=1
 ARG INSTALL_GEMINI=1
+ARG INSTALL_BROWSER_TOOLS=1
 
 # Install Claude Code globally via official installer
 RUN if [ "$INSTALL_CLAUDE" = "1" ]; then \
@@ -75,6 +76,14 @@ RUN if [ "$INSTALL_CODEX" = "1" ]; then \
 # Install Gemini CLI
 RUN if [ "$INSTALL_GEMINI" = "1" ]; then \
       npm install -g @google/gemini-cli; \
+    fi
+
+# Install browser automation tools for agent-driven E2E checks
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN if [ "$INSTALL_BROWSER_TOOLS" = "1" ]; then \
+      npm install -g @playwright/test agent-browser; \
+      npx playwright install --with-deps chromium; \
+      agent-browser install; \
     fi
 
 # Set working directory to root home

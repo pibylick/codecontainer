@@ -2,6 +2,10 @@
 
 Isolated container environments for AI coding harnesses (Claude Code, OpenCode, Codex CLI, Gemini CLI).
 
+The container image also includes browser automation tooling for agent-driven UI checks:
+- Playwright with Chromium for deterministic headless E2E tests
+- `agent-browser` for quick interactive smoke checks and debugging
+
 Supports **Docker** and **Apple Container** (macOS 26+) with automatic runtime detection.
 
 ## Quickstart
@@ -92,6 +96,33 @@ redis-tools
 --network host
 --gpus all
 ```
+
+### Browser Testing
+
+The default image ships with:
+
+- `@playwright/test`
+- Playwright-managed `chromium`
+- `agent-browser`
+
+Typical workflow inside the container:
+
+```bash
+# Start your app first, then run headless E2E
+npx playwright test
+
+# Quick smoke/debug session driven by an agent
+agent-browser open http://host.docker.internal:3000
+agent-browser snapshot -i
+```
+
+If your app is running on the host and you use Docker, add host access in `~/.code-container/DOCKER_FLAGS.txt` if needed:
+
+```text
+--add-host=host.docker.internal:host-gateway
+```
+
+For stable regression coverage, prefer Playwright tests committed to the repo. Use `agent-browser` mainly for exploratory checks, reproductions, and fast validation while coding.
 
 ### Runtime Detection
 

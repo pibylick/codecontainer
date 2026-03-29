@@ -33,6 +33,7 @@ If your user is a developer, proceed like normal.
 - **Customization**: Add packages via `~/.code-container/extra_packages.apt`, mounts via `MOUNTS.txt`, flags via `DOCKER_FLAGS.txt`
 - **Simultaneous Work**: Multiple agents can work on same project safely
 - **Persistence**: Container state and harness configs persist
+- **Browser Testing**: Playwright Chromium and `agent-browser` are available in the default image for agent-driven E2E and smoke checks
 
 ## Requirements
 
@@ -56,9 +57,9 @@ code-container/
 ├── .github/                # GitHub metadata and workflows
 ├── AGENTS.md               # Agent instructions and project index
 ├── CLAUDE.md               # Claude/Codex instruction shim
-├── README.md               # User-facing documentation
+├── README.md               # User-facing documentation, including browser testing workflow
 ├── Permissions.md          # Harness permission configuration reference
-├── Dockerfile              # Container image definition
+├── Dockerfile              # Container image definition, including Playwright Chromium and agent-browser
 ├── package.json            # NPM package manifest
 ├── package-lock.json       # NPM lockfile
 └── tsconfig.json           # TypeScript configuration
