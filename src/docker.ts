@@ -7,7 +7,7 @@ import { APPDATA_DIR, DOCKERFILE_PATH, EXTRA_PACKAGES_APT_PATH, APPLE_GIT_INJECT
 import { loadSettings } from "./config";
 import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
 import { loadFlags } from "./flags";
-import { CLI_BIN, isAppleContainer, runtimeDisplayName } from "./runtime";
+import { CLI_BIN, isAppleContainer, isPodman, runtimeDisplayName } from "./runtime";
 
 export const IMAGE_NAME = "code-container";
 export const IMAGE_TAG = "latest";
@@ -34,7 +34,9 @@ export function checkRuntime(): void {
     const result = spawnSync(CLI_BIN, ["info"], { stdio: "pipe" });
     if (result.status !== 0) {
       printError(
-        "Docker is not available. Please install Docker: https://docs.docker.com/get-docker/"
+        isPodman()
+          ? "Podman is not available. Please install Podman: https://podman.io/docs/installation"
+          : "Docker is not available. Please install Docker: https://docs.docker.com/get-docker/"
       );
       process.exit(1);
     }
@@ -167,6 +169,8 @@ export function containerRunning(containerName: string): boolean {
 export function stopContainer(containerName: string): void {
   if (isAppleContainer()) {
     spawnSync(CLI_BIN, ["stop", "--time", "3", containerName], { stdio: "inherit" });
+  } else if (isPodman()) {
+    spawnSync(CLI_BIN, ["stop", "--time", "3", containerName], { stdio: "inherit" });
   } else {
     spawnSync(CLI_BIN, ["stop", "--timeout", "3", containerName], { stdio: "inherit" });
   }
@@ -249,7 +253,7 @@ export function getOtherSessionCount(
   });
   if (result.status !== 0) return 0;
 
-  const execCmd = isAppleContainer() ? "container exec" : "docker exec";
+  const execCmd = `${CLI_BIN} exec`;
   const lines = result.stdout.split("\n");
   let count = 0;
 

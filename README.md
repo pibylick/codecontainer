@@ -6,7 +6,7 @@ The container image also includes browser automation tooling for agent-driven UI
 - Playwright with Chromium for deterministic headless E2E tests
 - `agent-browser` for quick interactive smoke checks and debugging
 
-Supports **Docker** and **Apple Container** (macOS 26+) with automatic runtime detection.
+Supports **Docker**, **Podman** (Linux), and **Apple Container** (macOS 26+) with automatic runtime detection.
 
 ## Quickstart
 
@@ -14,6 +14,7 @@ Supports **Docker** and **Apple Container** (macOS 26+) with automatic runtime d
 
 - **Container Runtime** (one of):
   - **Apple Container** (macOS 26+, Apple Silicon) — [github.com/apple/container](https://github.com/apple/container) — auto-detected
+  - **Podman** (Linux) — [podman.io](https://podman.io/) — auto-detected on Linux when available
   - **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
 - **Node.js** 18+
 
@@ -129,11 +130,13 @@ For stable regression coverage, prefer Playwright tests committed to the repo. U
 Automatic detection of the best container runtime:
 
 - **macOS (Apple Silicon)**: Uses Apple Container if installed, falls back to Docker
-- **Linux / WSL / other**: Uses Docker
+- **Linux**: Uses Podman if installed, falls back to Docker
+- **WSL / other**: Uses Docker
 
 Override with `CODE_CONTAINER_RUNTIME` env var:
 ```bash
 CODE_CONTAINER_RUNTIME=docker codecontainer          # Force Docker
+CODE_CONTAINER_RUNTIME=podman codecontainer          # Force Podman
 CODE_CONTAINER_RUNTIME=apple-container codecontainer  # Force Apple Container
 ```
 

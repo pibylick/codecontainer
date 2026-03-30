@@ -37,7 +37,7 @@ If your user is a developer, proceed like normal.
 
 ## Requirements
 
-- Docker (Desktop or Engine) or Apple Container (macOS 26+, Apple Silicon)
+- Docker (Desktop or Engine), Podman on Linux, or Apple Container (macOS 26+, Apple Silicon)
 - POSIX system (Linux, macOS, WSL)
 
 ---
@@ -77,8 +77,8 @@ code-container/
 - `src/agents.ts` — Agent registry and permissions. Defines supported AI agents (Claude Code, OpenCode, Codex CLI, Gemini CLI) with their config sources, mount mappings, and permission configs. Exports: `AGENTS`, `ALL_AGENT_IDS`, `AgentDefinition`, `PermissionConfig`, `getSelectedAgents`, `applyPermissions`
 - `src/certs.ts` — System certificate discovery and export. Lets users select CA certificates from the host keystore and writes them to `~/.code-container/certs/` for inclusion in the image. Exports: `SystemCert`, `getSystemCerts`, `selectAndExportCerts`, `hasCerts`
 - `src/commands.ts` — Business logic for all CLI commands. Image building, container lifecycle, listing, cleaning. Agent selection and yolo mode prompts during init. Exports: `buildImage`, `init`, `runContainer`, `stopContainerForProject`, `removeContainerForProject`, `listContainers`, `cleanContainers`
-- `src/runtime.ts` — Platform detection and runtime selection. Auto-detects Apple Container on macOS ARM64, falls back to Docker. Override via `CODE_CONTAINER_RUNTIME` env var. Exports: `runtime`, `CLI_BIN`, `isAppleContainer`, `runtimeDisplayName`
-- `src/docker.ts` — Low-level container CLI wrappers. Supports both Docker and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs and `extra_packages.apt` exist, then handles image/container operations and naming via SHA1 hash.
+- `src/runtime.ts` — Platform detection and runtime selection. Auto-detects Apple Container on macOS ARM64, Podman on Linux, then falls back to Docker. Override via `CODE_CONTAINER_RUNTIME` env var. Exports: `runtime`, `CLI_BIN`, `isAppleContainer`, `isPodman`, `runtimeDisplayName`
+- `src/docker.ts` — Low-level container CLI wrappers. Supports Docker, Podman, and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs and `extra_packages.apt` exist, then handles image/container operations and naming via SHA1 hash.
 - `src/config.ts` — Configuration paths and settings persistence. Manages `~/.code-container/` directory. Settings include agent selection and yolo mode. Re-exports appdata paths including the generated Dockerfile and extra apt packages file path.
 - `src/mounts.ts` — Volume mount management. Agent mounts computed at runtime from selection, user mounts from MOUNTS.txt. Handles migration of old MOUNTS.txt format. Exports: `ensureMountsFile`, `loadUserMounts`, `getAgentMounts`, `getCommonMounts`
 - `src/flags.ts` — Custom Docker flags loader from `DOCKER_FLAGS.txt`. Uses shell-quote for safe parsing. Exports: `loadFlags`
