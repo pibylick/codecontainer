@@ -81,6 +81,7 @@ code-container/
 - `src/docker.ts` — Low-level container CLI wrappers. Supports Docker, Podman, and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs and `extra_packages.apt` exist, then handles image/container operations and naming via SHA1 hash.
 - `src/config.ts` — Configuration paths and settings persistence. Manages `~/.code-container/` directory. Settings include agent selection and yolo mode. Re-exports appdata paths including the generated Dockerfile and extra apt packages file path.
 - `src/mounts.ts` — Volume mount management. Agent mounts computed at runtime from selection, user mounts from MOUNTS.txt. Handles migration of old MOUNTS.txt format. Exports: `ensureMountsFile`, `loadUserMounts`, `getAgentMounts`, `getCommonMounts`
+- `src/project-config.ts` — Per-project container configuration via `.codecontainer.json`. Loads, validates (Zod), and hashes project config files. Includes security confirmation gate for sensitive fields (runArgs, packages, postCreateCommand, mounts, containerEnv). Exports: `ProjectConfig`, `ProjectConfigSchema`, `loadProjectConfig`, `hashProjectConfigFile`, `hasSecuritySensitiveFields`, `confirmProjectConfig`
 - `src/flags.ts` — Custom Docker flags loader from `DOCKER_FLAGS.txt`. Uses shell-quote for safe parsing. Exports: `loadFlags`
 - `src/utils.ts` — Colored console output and interactive prompts. Exports include print helpers, selection prompts, and `resolveProjectPath`
 
