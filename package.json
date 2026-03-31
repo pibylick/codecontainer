@@ -18,7 +18,8 @@
     "start": "node dist/main.js",
     "postinstall": "node scripts/postinstall.js",
     "publish-latest": "npm run clean && npm run build && npm publish --access public",
-    "publish-nightly": "npm run clean && npm run build && npm publish --tag nightly --access public"
+    "publish-nightly": "npm run clean && npm run build && npm publish --tag nightly --access public",
+    "test": "vitest run --passWithNoTests"
   },
   "keywords": [
     "docker",
@@ -35,7 +36,8 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.19.37",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.1"
   },
   "dependencies": {
     "@types/shell-quote": "^1.7.5",

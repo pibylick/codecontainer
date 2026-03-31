@@ -200,7 +200,7 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
-async function findAvailablePort(preferred: number, range: number = 100): Promise<number | null> {
+export async function findAvailablePort(preferred: number, range: number = 100): Promise<number | null> {
   for (let port = preferred; port < preferred + range; port++) {
     if (await isPortAvailable(port)) return port;
   }
