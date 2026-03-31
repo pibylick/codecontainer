@@ -9,6 +9,7 @@ import { loadSettings } from "./config";
 import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
 import { loadFlags } from "./flags";
 import { CLI_BIN, isAppleContainer, isPodman, runtimeDisplayName } from "./runtime";
+import type { ProjectConfig } from "./project-config";
 
 export const IMAGE_NAME = "code-container";
 export const IMAGE_TAG = "latest";
@@ -210,7 +211,8 @@ export async function findAvailablePort(preferred: number, range: number = 100):
 export async function createNewContainer(
   containerName: string,
   projectName: string,
-  projectPath: string
+  projectPath: string,
+  projectConfig?: ProjectConfig | null
 ): Promise<boolean> {
   const mounts = getMounts(projectPath, projectName);
   const settings = loadSettings();
@@ -222,14 +224,41 @@ export async function createNewContainer(
 
   args.push("-e", "TERM=xterm-256color");
 
-  const port = await findAvailablePort(3000);
-  if (port) {
-    args.push("-p", `${port}:3000`);
-    if (port !== 3000) {
-      printWarning(`Port 3000 in use, mapping container port 3000 to host port ${port}`);
+  // Port mapping: use forwardPorts from project config, or default to auto-find port 3000
+  if (projectConfig?.forwardPorts && projectConfig.forwardPorts.length > 0) {
+    for (const containerPort of projectConfig.forwardPorts) {
+      const hostPort = await findAvailablePort(containerPort);
+      if (hostPort) {
+        args.push("-p", `${hostPort}:${containerPort}`);
+        if (hostPort !== containerPort) {
+          printWarning(`Port ${containerPort} in use, mapping to host port ${hostPort}`);
+        }
+      } else {
+        printWarning(`No available port found for ${containerPort}, skipping`);
+      }
     }
   } else {
-    printWarning("No available port found in range 3000-3099, skipping port mapping");
+    const port = await findAvailablePort(3000);
+    if (port) {
+      args.push("-p", `${port}:3000`);
+      if (port !== 3000) {
+        printWarning(`Port 3000 in use, mapping container port 3000 to host port ${port}`);
+      }
+    } else {
+      printWarning("No available port found in range 3000-3099, skipping port mapping");
+    }
+  }
+
+  // Container environment variables from project config
+  if (projectConfig?.containerEnv) {
+    for (const [key, value] of Object.entries(projectConfig.containerEnv)) {
+      args.push("-e", `${key}=${value}`);
+    }
+  }
+
+  // Hostname from project config name
+  if (projectConfig?.name) {
+    args.push("--hostname", projectConfig.name);
   }
 
   args.push("-w", `/root/${projectName}`);
@@ -238,14 +267,51 @@ export async function createNewContainer(
     args.push("-v", mount);
   }
 
+  // Project-specific mounts (additive)
+  if (projectConfig?.mounts) {
+    for (const mount of projectConfig.mounts) {
+      args.push("-v", mount);
+    }
+  }
+
   if (!isAppleContainer()) {
     const flags = loadFlags();
     args.push(...flags);
+
+    // Project-specific runArgs (Docker/Podman only)
+    if (projectConfig?.runArgs) {
+      args.push(...projectConfig.runArgs);
+    }
+  } else if (projectConfig?.runArgs && projectConfig.runArgs.length > 0) {
+    printWarning("runArgs are not supported on Apple Container, skipping");
+  }
+
+  // Store config hash as label for drift detection
+  const { hashProjectConfigFile } = await import("./project-config");
+  const configHash = hashProjectConfigFile(projectPath);
+  if (configHash && !isAppleContainer()) {
+    args.push("--label", `codecontainer.config-hash=${configHash}`);
   }
 
   args.push(`${IMAGE_NAME}:${IMAGE_TAG}`, "sleep", "infinity");
 
   const result = spawnSync(CLI_BIN, args, { stdio: "inherit" });
+  return result.status === 0;
+}
+
+export function getContainerLabel(containerName: string, label: string): string | null {
+  const result = spawnSync(CLI_BIN, [
+    "inspect", "--format", `{{index .Config.Labels "${label}"}}`, containerName
+  ], { stdio: "pipe" });
+
+  if (result.status !== 0) return null;
+  const value = result.stdout?.toString().trim();
+  if (!value || value === "<no value>") return null;
+  return value;
+}
+
+export function execInContainer(containerName: string, command: string[]): boolean {
+  const result = spawnSync(CLI_BIN, ["exec", containerName, ...command], { stdio: "inherit" });
   return result.status === 0;
 }
 

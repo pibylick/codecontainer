@@ -37,6 +37,8 @@ import {
 } from "./config";
 import { AGENTS, applyPermissions } from "./agents";
 import { selectAndExportCerts, hasCerts } from "./certs";
+import { loadProjectConfig, hashProjectConfigFile, confirmProjectConfig } from "./project-config";
+import { getContainerLabel, execInContainer } from "./docker";
 
 export async function buildImage(agentIds?: string[], memoryMB?: number): Promise<void> {
   if (!agentIds) {
@@ -171,35 +173,109 @@ export async function runContainer(projectPath: string): Promise<void> {
     await buildImage(settings.agents, settings.memoryMB);
   }
 
-  if (containerRunning(containerName)) {
-    printInfo(`Container '${containerName}' is already running`);
-    printInfo("Attaching to container...");
-    execInteractive(containerName, projectName);
-    stopContainerIfLastSession(containerName, projectName);
-    return;
+  // Load per-project config
+  let projectConfig = loadProjectConfig(projectPath);
+  if (projectConfig) {
+    projectConfig = await confirmProjectConfig(projectConfig, projectPath);
   }
 
-  if (containerExists(containerName)) {
-    printInfo(`Starting existing container: ${containerName}`);
-    startContainer(containerName);
-    injectGitConfigIntoContainer(containerName);
-    execInteractive(containerName, projectName);
-    stopContainerIfLastSession(containerName, projectName);
-    return;
+  // Check for config drift on existing containers
+  if (containerRunning(containerName) || containerExists(containerName)) {
+    const driftResult = await checkConfigDrift(containerName, projectPath);
+    if (driftResult === "recreate") {
+      printInfo("Recreating container with updated config...");
+      if (containerRunning(containerName)) {
+        stopContainer(containerName);
+      }
+      removeContainer(containerName);
+      // Fall through to create new container
+    } else {
+      // Attach to existing container
+      if (!containerRunning(containerName)) {
+        printInfo(`Starting existing container: ${containerName}`);
+        startContainer(containerName);
+        injectGitConfigIntoContainer(containerName);
+      } else {
+        printInfo(`Container '${containerName}' is already running`);
+        printInfo("Attaching to container...");
+      }
+      execInteractive(containerName, projectName);
+      stopContainerIfLastSession(containerName, projectName);
+      return;
+    }
   }
 
   printInfo(`Creating new container: ${containerName}`);
   printInfo(`Project: ${projectPath}`);
 
-  if (!(await createNewContainer(containerName, projectName, projectPath))) {
+  if (!(await createNewContainer(containerName, projectName, projectPath, projectConfig))) {
     printError("Failed to create container");
     process.exit(1);
   }
 
+  // Post-create: inject git config → install packages → run postCreateCommand
   injectGitConfigIntoContainer(containerName);
+
+  if (projectConfig?.packages && projectConfig.packages.length > 0) {
+    printInfo(`Installing project packages: ${projectConfig.packages.join(", ")}...`);
+    const pkgResult = execInContainer(containerName, [
+      "sh", "-c", `apt-get update && apt-get install -y ${projectConfig.packages.join(" ")}`
+    ]);
+    if (!pkgResult) {
+      printWarning("Package installation failed, continuing without packages");
+    }
+  }
+
+  if (projectConfig?.postCreateCommand) {
+    printInfo(`Running postCreateCommand: ${projectConfig.postCreateCommand}`);
+    const cmdResult = execInContainer(containerName, [
+      "sh", "-c", projectConfig.postCreateCommand
+    ]);
+    if (!cmdResult) {
+      printWarning("postCreateCommand failed, continuing");
+    }
+  }
+
   execInteractive(containerName, projectName);
   stopContainerIfLastSession(containerName, projectName);
   printSuccess("Container session ended");
+}
+
+async function checkConfigDrift(
+  containerName: string,
+  projectPath: string
+): Promise<"recreate" | "continue"> {
+  const storedHash = getContainerLabel(containerName, "codecontainer.config-hash");
+  const currentHash = hashProjectConfigFile(projectPath);
+
+  // No stored hash and no current config: no drift (pre-feature container)
+  if (!storedHash && !currentHash) {
+    return "continue";
+  }
+
+  // New config on existing container without stored hash
+  if (!storedHash && currentHash) {
+    printWarning("New .codecontainer.json detected for existing container.");
+    const recreate = await promptYesNo("Recreate container with project config?");
+    return recreate ? "recreate" : "continue";
+  }
+
+  // Config removed since container creation
+  if (storedHash && !currentHash) {
+    printWarning(".codecontainer.json was removed since container was created.");
+    const recreate = await promptYesNo("Recreate container without project config?");
+    return recreate ? "recreate" : "continue";
+  }
+
+  // Config unchanged
+  if (storedHash === currentHash) {
+    return "continue";
+  }
+
+  // Config changed
+  printWarning(".codecontainer.json has changed since container was created.");
+  const recreate = await promptYesNo("Recreate container with updated config?");
+  return recreate ? "recreate" : "continue";
 }
 
 export function stopContainerForProject(projectPath: string): void {
