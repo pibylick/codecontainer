@@ -65,6 +65,11 @@ export async function buildImage(agentIds?: string[], memoryMB?: number): Promis
   saveSettings(settings);
   printInfo(`Memory limit: ${memoryMB / 1024} GB`);
 
+  // Ensure CA certificates are available before building
+  if (!hasCerts()) {
+    await selectAndExportCerts();
+  }
+
   printInfo(`Building ${runtimeDisplayName()} image: ${IMAGE_NAME}:${IMAGE_TAG}`);
   if (!buildImageRaw(agentIds, memoryMB)) {
     printError(`Failed to build ${runtimeDisplayName()} image`);
