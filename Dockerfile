@@ -82,8 +82,19 @@ RUN if [ "$INSTALL_GEMINI" = "1" ]; then \
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN if [ "$INSTALL_BROWSER_TOOLS" = "1" ]; then \
       npm install -g @playwright/test agent-browser; \
-      npx playwright install --with-deps chromium; \
-      agent-browser install; \
+      . "$NVM_DIR/nvm.sh" && ln -sf "$NVM_DIR/versions/node/$(nvm current)/bin/"* /usr/local/bin/; \
+      ARCH=$(dpkg --print-architecture); \
+      if [ "$ARCH" = "arm64" ]; then \
+        apt-get update && apt-get install -y chromium-browser || apt-get install -y chromium; \
+        npx playwright install-deps chromium; \
+        CHROMIUM_PATH=$(which chromium-browser 2>/dev/null || which chromium 2>/dev/null); \
+        echo "export CHROME_PATH=$CHROMIUM_PATH" >> /etc/environment; \
+        echo "export CHROME_PATH=$CHROMIUM_PATH" >> /root/.bashrc; \
+        echo "export CHROME_PATH=$CHROMIUM_PATH" >> /root/.zshrc; \
+      else \
+        npx playwright install --with-deps chromium; \
+      fi; \
+      agent-browser install || true; \
     fi
 
 # Set working directory to root home
