@@ -191,7 +191,7 @@ export async function runContainer(projectPath: string): Promise<void> {
   printInfo(`Creating new container: ${containerName}`);
   printInfo(`Project: ${projectPath}`);
 
-  if (!createNewContainer(containerName, projectName, projectPath)) {
+  if (!(await createNewContainer(containerName, projectName, projectPath))) {
     printError("Failed to create container");
     process.exit(1);
   }

@@ -1,8 +1,9 @@
 import { spawnSync } from "child_process";
+import * as net from "net";
 import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
-import { printInfo, printError } from "./utils";
+import { printInfo, printError, printWarning } from "./utils";
 import { APPDATA_DIR, DOCKERFILE_PATH, EXTRA_PACKAGES_APT_PATH, APPLE_GIT_INJECT_PATH } from "./paths";
 import { loadSettings } from "./config";
 import { getAgentMounts, getCommonMounts, loadUserMounts } from "./mounts";
@@ -188,11 +189,29 @@ export function removeContainer(containerName: string): void {
   }
 }
 
-export function createNewContainer(
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "0.0.0.0");
+  });
+}
+
+async function findAvailablePort(preferred: number, range: number = 100): Promise<number | null> {
+  for (let port = preferred; port < preferred + range; port++) {
+    if (await isPortAvailable(port)) return port;
+  }
+  return null;
+}
+
+export async function createNewContainer(
   containerName: string,
   projectName: string,
   projectPath: string
-): boolean {
+): Promise<boolean> {
   const mounts = getMounts(projectPath, projectName);
   const settings = loadSettings();
   const args = ["run", "-d", "--name", containerName];
@@ -202,7 +221,17 @@ export function createNewContainer(
   }
 
   args.push("-e", "TERM=xterm-256color");
-  args.push("-p", "3000:3000");
+
+  const port = await findAvailablePort(3000);
+  if (port) {
+    args.push("-p", `${port}:3000`);
+    if (port !== 3000) {
+      printWarning(`Port 3000 in use, mapping container port 3000 to host port ${port}`);
+    }
+  } else {
+    printWarning("No available port found in range 3000-3099, skipping port mapping");
+  }
+
   args.push("-w", `/root/${projectName}`);
 
   for (const mount of mounts) {
