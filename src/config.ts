@@ -14,6 +14,7 @@ const SettingsSchema = z.object({
   agents: z.array(z.enum(ALL_AGENT_IDS as [string, ...string[]])).default(ALL_AGENT_IDS),
   yolo: z.boolean().default(false),
   memoryMB: z.number().optional(),
+  acceptedProjectConfigs: z.record(z.string(), z.string()).default({}),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -28,7 +29,7 @@ export function ensureAppdataDir(): void {
 
 export function loadSettings(): Settings {
   if (!fs.existsSync(SETTINGS_PATH)) {
-    return { completedInit: false, acceptedTos: false, agents: ALL_AGENT_IDS, yolo: false, memoryMB: undefined };
+    return { completedInit: false, acceptedTos: false, agents: ALL_AGENT_IDS, yolo: false, memoryMB: undefined, acceptedProjectConfigs: {} };
   }
   const content = fs.readFileSync(SETTINGS_PATH, "utf-8");
   return SettingsSchema.parse(JSON.parse(content));
