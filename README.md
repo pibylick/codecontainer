@@ -98,6 +98,41 @@ redis-tools
 --gpus all
 ```
 
+### Per-Project Configuration
+
+Add a `.codecontainer.json` file to any project root to declare container settings per-project:
+
+```json
+{
+  "name": "my-project",
+  "forwardPorts": [3000, 5432],
+  "containerEnv": {
+    "DATABASE_URL": "postgres://localhost:5432/mydb",
+    "NODE_ENV": "development"
+  },
+  "packages": ["postgresql-client", "redis-tools"],
+  "mounts": ["~/.aws:/root/.aws:ro"],
+  "runArgs": ["--cpus=4"],
+  "postCreateCommand": "npm install"
+}
+```
+
+All fields are optional. Per-project config merges additively with global settings — global mounts and flags are always preserved.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name and container hostname |
+| `forwardPorts` | Ports to map from container to host (replaces default port 3000) |
+| `containerEnv` | Environment variables set inside the container |
+| `packages` | Apt packages installed at runtime on first container creation |
+| `mounts` | Additional volume mounts (additive with global mounts) |
+| `runArgs` | Extra Docker/Podman run flags (skipped on Apple Container) |
+| `postCreateCommand` | Command run after container creation (after packages) |
+
+**Security:** Fields that execute as root or expose host resources (`runArgs`, `packages`, `postCreateCommand`, `mounts`, `containerEnv`) require user confirmation on first use. Acceptance is stored per config hash — if the file changes, you are prompted again.
+
+**Config drift:** If `.codecontainer.json` changes between sessions, you are prompted to recreate the container.
+
 ### Browser Testing
 
 The default image ships with:
