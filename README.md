@@ -165,6 +165,12 @@ Current limitations:
 - `.codecontainer.json` mounts and `runArgs` are ignored in Kubernetes mode
 - `clean` is still local-only
 
+For a fast cluster sanity check after `npm run build`, run:
+
+```bash
+scripts/k8s-smoke-test.sh /path/to/project
+```
+
 ## Features
 
 ### Agent Selection

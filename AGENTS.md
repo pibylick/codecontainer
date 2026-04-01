@@ -92,6 +92,7 @@ code-container/
 - `scripts/postinstall.js` — NPM post-install hook. Creates `~/.code-container/` structure, syncs the generated base Dockerfile, and initializes `extra_packages.apt`.
 - `scripts/migrate.sh` — Migrates config files from old shell script location to new `~/.code-container/configs/`.
 - `scripts/cleanup.sh` — Removes old config files from project root after migration.
+- `scripts/k8s-smoke-test.sh` — Smoke test for the experimental Kubernetes backend. Builds the K8s image, starts a pod, verifies tools and PVC persistence, and can optionally open interactive Claude login or Remote Control flows.
 
 ## Docs Index (`docs/`)
 
