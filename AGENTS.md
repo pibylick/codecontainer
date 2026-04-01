@@ -18,7 +18,7 @@ If your user is a developer, proceed like normal.
 
 # Developer Overview
 
-**code-container** (`codecontainer`) creates isolated container environments for AI coding harnesses (Claude Code, OpenCode, Codex CLI, Gemini CLI).
+**code-container** (`codecontainer`) creates a local AI development environment with isolated project containers for Claude Code, OpenCode, Codex CLI, and Gemini CLI.
 
 ## Purpose
 
@@ -52,6 +52,7 @@ Stable tracked repo structure (omitting local/generated/ignored directories such
 
 ```
 code-container/
+├── docs/                   # Supporting documentation and publishable content drafts
 ├── src/                    # TypeScript source code
 ├── scripts/                # Install/migration/cleanup helpers
 ├── .github/                # GitHub metadata and workflows
@@ -90,6 +91,10 @@ code-container/
 - `scripts/postinstall.js` — NPM post-install hook. Creates `~/.code-container/` structure, syncs the generated base Dockerfile, and initializes `extra_packages.apt`.
 - `scripts/migrate.sh` — Migrates config files from old shell script location to new `~/.code-container/configs/`.
 - `scripts/cleanup.sh` — Removes old config files from project root after migration.
+
+## Docs Index (`docs/`)
+
+- `docs/ai-coding-agents-containers-article.md` — Publish-ready article draft for dev.to or LinkedIn about running AI coding agents safely in containers, with links back to the repository.
 
 ## Storage Structure
 

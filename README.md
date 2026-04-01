@@ -1,12 +1,87 @@
 # codecontainer
 
-Isolated container environments for AI coding harnesses (Claude Code, OpenCode, Codex CLI, Gemini CLI).
+AI Development Environment for Coding Agents
+
+Run Claude Code, Codex CLI, Gemini CLI, and OpenCode in isolated project containers.
+
+`codecontainer` gives you a local AI development environment with safer defaults, persistent per-project containers, and built-in support for Docker, Podman, and Apple Container.
+
+Use it when you want local AI coding, containerized development, and a practical sandbox for AI agents without building your own workflow from scratch.
 
 The container image also includes browser automation tooling for agent-driven UI checks:
 - Playwright with Chromium for deterministic headless E2E tests
 - `agent-browser` for quick interactive smoke checks and debugging
 
 Supports **Docker**, **Podman** (Linux), and **Apple Container** (macOS 26+) with automatic runtime detection.
+
+## Why This Exists
+
+Running AI coding agents directly on your host machine gets risky quickly:
+- they can modify the wrong files
+- they can break local toolchains and dependencies
+- they can access secrets and config you did not mean to expose
+
+`codecontainer` solves this by creating a containerized development environment for each project, so AI agents can work locally with better isolation, repeatability, and safety.
+
+## Why Not Docker Alone?
+
+Docker gives you containers, but it does not give you an opinionated local AI coding setup.
+
+`codecontainer` adds the missing layer for AI-assisted development:
+- per-project persistent containers
+- agent-specific setup for Claude, Codex, Gemini, and OpenCode
+- shared harness configs across projects
+- optional yolo mode contained inside the sandbox
+- browser testing tools available in the default image
+
+## How It Works
+
+```text
+Host machine
+  -> codecontainer
+  -> Project container
+  -> AI coding agent
+  -> Your codebase
+```
+
+This makes `codecontainer` useful both as an AI agents sandbox and as a repeatable AI development environment for local coding workflows.
+
+## Use Cases
+
+- Run Claude Code, Codex CLI, Gemini CLI, or OpenCode in an isolated container
+- Create a containerized dev environment for local AI coding
+- Keep project dependencies and agent state separate across repositories
+- Test AI-generated UI changes with Playwright or `agent-browser`
+
+## FAQ
+
+### What is codecontainer?
+
+`codecontainer` is a CLI that creates a local AI development environment inside containers. It is designed for developers who want to run AI coding agents locally with better isolation and repeatable project setup.
+
+### Which AI coding agents does it support?
+
+It supports Claude Code, Codex CLI, Gemini CLI, and OpenCode. You select which agents to install during setup.
+
+### Why use codecontainer instead of Docker alone?
+
+Docker gives you raw containers. `codecontainer` adds agent-aware setup, per-project persistence, shared harness configs, permission choices, browser tooling, and a workflow designed specifically for local AI coding.
+
+### Is this a good fit for local AI coding?
+
+Yes. If you want a local AI coding setup that reduces risk to your host machine while keeping your workflow fast, this is the main use case.
+
+### Does it work as an AI agents sandbox?
+
+Yes. Each project runs in its own container, which makes `codecontainer` useful as an AI agents sandbox for experimenting with code changes, tool installs, and agent-driven browser testing.
+
+### Which container runtimes are supported?
+
+`codecontainer` supports Docker, Podman on Linux, and Apple Container on macOS 26+ with Apple Silicon. Runtime detection is automatic, but you can override it with an environment variable.
+
+### Can I use it as a containerized development environment even without AI?
+
+You can, but the product is optimized for AI-assisted development. The main value is the combination of containerized development and agent-specific setup for Claude, Codex, Gemini, and OpenCode.
 
 ## Quickstart
 

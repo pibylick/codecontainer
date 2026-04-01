@@ -1,7 +1,7 @@
 {
   "name": "@pibylick/codecontainer",
   "version": "3.2.0",
-  "description": "Manage isolated container environments for AI coding harnesses (Docker & Apple Container)",
+  "description": "Local AI development environment for isolated coding agents in containers with Docker, Podman, and Apple Container",
   "main": "dist/main.js",
   "bin": {
     "codecontainer": "dist/main.js"
@@ -24,13 +24,27 @@
   "keywords": [
     "docker",
     "apple-container",
+    "podman",
     "container",
     "development",
+    "development-environment",
+    "dev-environment",
+    "containerized-development",
     "cli",
     "ai",
+    "ai-development-environment",
+    "ai-coding",
+    "ai-coding-agent",
+    "ai-agent",
+    "ai-agent-sandbox",
+    "local-ai-coding",
     "claude",
+    "claude-code",
     "codex",
-    "gemini"
+    "codex-cli",
+    "gemini",
+    "gemini-cli",
+    "developer-tools"
   ],
   "author": "pibylick",
   "license": "MIT",
