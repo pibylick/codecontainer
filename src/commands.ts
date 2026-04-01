@@ -8,6 +8,7 @@ import {
   promptYesNo,
   promptAgentSelection,
   promptSelect,
+  promptInput,
 } from "./utils";
 import {
   generateContainerName,
@@ -34,21 +35,35 @@ import {
   saveSettings,
   copyConfigs,
   configsExist,
+  type Settings,
 } from "./config";
 import { AGENTS, applyPermissions } from "./agents";
 import { selectAndExportCerts, hasCerts } from "./certs";
 import { loadProjectConfig, hashProjectConfigFile, confirmProjectConfig } from "./project-config";
 import { getContainerLabel, execInContainer } from "./docker";
+import {
+  type K8sOverrides,
+  buildK8sImage as buildK8sImageRaw,
+  runK8sPod,
+  execK8sLogin,
+  execK8sRemote,
+  listK8sPods,
+  stopK8sPod,
+  removeK8sPod,
+} from "./k8s";
 
-export async function buildImage(agentIds?: string[], memoryMB?: number): Promise<void> {
+function selectedAgentNames(agentIds: string[]): string {
+  return AGENTS
+    .filter(a => agentIds.includes(a.id))
+    .map(a => a.name)
+    .join(", ");
+}
+
+async function resolveBuildInputs(agentIds?: string[], memoryMB?: number): Promise<{ agentIds: string[]; memoryMB: number; settings: Settings }> {
   if (!agentIds) {
     printInfo("Select which agents to install in the container image:");
     agentIds = await promptAgentSelection(AGENTS);
-    const agentNames = AGENTS
-      .filter(a => agentIds!.includes(a.id))
-      .map(a => a.name)
-      .join(", ");
-    printInfo(`Agents to install: ${agentNames}`);
+    printInfo(`Agents to install: ${selectedAgentNames(agentIds)}`);
   }
 
   if (memoryMB === undefined) {
@@ -66,16 +81,28 @@ export async function buildImage(agentIds?: string[], memoryMB?: number): Promis
   settings.memoryMB = memoryMB;
   saveSettings(settings);
   printInfo(`Memory limit: ${memoryMB / 1024} GB`);
+  return { agentIds, memoryMB, settings };
+}
+
+export async function buildImage(agentIds?: string[], memoryMB?: number): Promise<void> {
+  const { agentIds: resolvedAgentIds, memoryMB: resolvedMemoryMB } = await resolveBuildInputs(agentIds, memoryMB);
 
   // Always offer to update CA certificates before building
   await selectAndExportCerts();
 
   printInfo(`Building ${runtimeDisplayName()} image: ${IMAGE_NAME}:${IMAGE_TAG}`);
-  if (!buildImageRaw(agentIds, memoryMB)) {
+  if (!buildImageRaw(resolvedAgentIds, resolvedMemoryMB)) {
     printError(`Failed to build ${runtimeDisplayName()} image`);
     process.exit(1);
   }
   printSuccess(`${runtimeDisplayName()} image built successfully`);
+}
+
+export async function buildK8sImage(overrides: K8sOverrides = {}, agentIds?: string[], memoryMB?: number): Promise<void> {
+  const { agentIds: resolvedAgentIds, memoryMB: resolvedMemoryMB, settings } = await resolveBuildInputs(agentIds, memoryMB);
+
+  await selectAndExportCerts();
+  buildK8sImageRaw(settings, resolvedAgentIds, resolvedMemoryMB, overrides);
 }
 
 export async function init(isStartup: boolean = false): Promise<void> {
@@ -141,6 +168,15 @@ export async function init(isStartup: boolean = false): Promise<void> {
     applyPermissions(selectedAgents);
     printSuccess("Full permissions configured for selected agents");
   }
+
+  printInfo("");
+  printInfo("Kubernetes defaults for experimental remote pods:");
+  settings.k8s.namespace = await promptInput("Kubernetes namespace", settings.k8s.namespace);
+  settings.k8s.context = await promptInput("kubectl context (optional)", settings.k8s.context);
+  settings.k8s.registry = await promptInput("Image registry for --k8s builds (optional)", settings.k8s.registry);
+  settings.k8s.workspaceSize = await promptInput("Kubernetes PVC size", settings.k8s.workspaceSize);
+  settings.k8s.cpu = await promptInput("Kubernetes CPU limit/request", settings.k8s.cpu);
+  settings.k8s.memory = await promptInput("Kubernetes memory limit/request", settings.k8s.memory);
 
   // CA certificates
   if (!hasCerts()) {
@@ -241,6 +277,31 @@ export async function runContainer(projectPath: string): Promise<void> {
   printSuccess("Container session ended");
 }
 
+export async function runK8sContainer(projectPath: string, overrides: K8sOverrides = {}): Promise<void> {
+  if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
+    printError(`Project directory does not exist or is not a directory: ${projectPath}`);
+    process.exit(1);
+  }
+
+  const settings = loadSettings();
+  let projectConfig = loadProjectConfig(projectPath);
+  if (projectConfig) {
+    projectConfig = await confirmProjectConfig(projectConfig, projectPath);
+  }
+
+  runK8sPod(settings, projectPath, projectConfig, overrides);
+}
+
+export function loginK8s(projectPath: string, overrides: K8sOverrides = {}): void {
+  const settings = loadSettings();
+  execK8sLogin(settings, projectPath, overrides);
+}
+
+export function remoteK8s(projectPath: string, overrides: K8sOverrides = {}): void {
+  const settings = loadSettings();
+  execK8sRemote(settings, projectPath, overrides);
+}
+
 async function checkConfigDrift(
   containerName: string,
   projectPath: string
@@ -318,6 +379,12 @@ export function listContainers(): void {
   listContainersRaw();
 }
 
+export function listK8sContainers(overrides: K8sOverrides = {}): void {
+  const settings = loadSettings();
+  printInfo("Code Containers on Kubernetes:");
+  listK8sPods(settings, overrides);
+}
+
 export function syncConfigs(): void {
   const settings = loadSettings();
   printInfo("Syncing config files to ~/.code-container/configs...");
@@ -339,4 +406,14 @@ export function cleanContainers(): void {
 
   removeContainersById(containerIds);
   printSuccess("Cleanup complete");
+}
+
+export function stopK8sContainerForProject(projectPath: string, overrides: K8sOverrides = {}): void {
+  const settings = loadSettings();
+  stopK8sPod(settings, projectPath, overrides);
+}
+
+export function removeK8sContainerForProject(projectPath: string, overrides: K8sOverrides = {}): void {
+  const settings = loadSettings();
+  removeK8sPod(settings, projectPath, overrides);
 }

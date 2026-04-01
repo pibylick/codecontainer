@@ -15,9 +15,41 @@ const SettingsSchema = z.object({
   yolo: z.boolean().default(false),
   memoryMB: z.number().optional(),
   acceptedProjectConfigs: z.record(z.string(), z.string()).default({}),
+  k8s: z.object({
+    namespace: z.string().default("codecontainer"),
+    context: z.string().default(""),
+    registry: z.string().default(""),
+    workspaceSize: z.string().default("20Gi"),
+    cpu: z.string().default("2"),
+    memory: z.string().default("8Gi"),
+  }).default({
+    namespace: "codecontainer",
+    context: "",
+    registry: "",
+    workspaceSize: "20Gi",
+    cpu: "2",
+    memory: "8Gi",
+  }),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
+
+const DEFAULT_SETTINGS: Settings = {
+  completedInit: false,
+  acceptedTos: false,
+  agents: ALL_AGENT_IDS,
+  yolo: false,
+  memoryMB: undefined,
+  acceptedProjectConfigs: {},
+  k8s: {
+    namespace: "codecontainer",
+    context: "",
+    registry: "",
+    workspaceSize: "20Gi",
+    cpu: "2",
+    memory: "8Gi",
+  },
+};
 
 export function ensureAppdataDir(): void {
   if (!fs.existsSync(APPDATA_DIR)) {
@@ -29,7 +61,7 @@ export function ensureAppdataDir(): void {
 
 export function loadSettings(): Settings {
   if (!fs.existsSync(SETTINGS_PATH)) {
-    return { completedInit: false, acceptedTos: false, agents: ALL_AGENT_IDS, yolo: false, memoryMB: undefined, acceptedProjectConfigs: {} };
+    return DEFAULT_SETTINGS;
   }
   const content = fs.readFileSync(SETTINGS_PATH, "utf-8");
   return SettingsSchema.parse(JSON.parse(content));

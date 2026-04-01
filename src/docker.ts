@@ -66,10 +66,10 @@ export function generateContainerName(projectPath: string): string {
   return `${CONTAINER_PREFIX}-${projectName}-${pathHash}`;
 }
 
-export function imageExists(): boolean {
+export function imageExists(imageRef: string = `${IMAGE_NAME}:${IMAGE_TAG}`): boolean {
   const result = spawnSync(
     CLI_BIN,
-    ["image", "inspect", `${IMAGE_NAME}:${IMAGE_TAG}`],
+    ["image", "inspect", imageRef],
     { stdio: "pipe" }
   );
   return result.status === 0;
@@ -102,9 +102,9 @@ function ensureBuildAssets(): void {
   }
 }
 
-export function buildImageRaw(agentIds?: string[], memoryMB?: number): boolean {
+export function buildImageRaw(agentIds?: string[], memoryMB?: number, imageRef: string = `${IMAGE_NAME}:${IMAGE_TAG}`): boolean {
   ensureDockerfile();
-  const args = ["build", "-t", `${IMAGE_NAME}:${IMAGE_TAG}`];
+  const args = ["build", "-t", imageRef];
   if (isAppleContainer()) {
     args.push("-m", `${memoryMB || 4096}MB`);
   }
@@ -121,6 +121,11 @@ export function buildImageRaw(agentIds?: string[], memoryMB?: number): boolean {
   }
   args.push(APPDATA_DIR);
   const result = spawnSync(CLI_BIN, args, { stdio: "inherit" });
+  return result.status === 0;
+}
+
+export function pushImageRaw(imageRef: string): boolean {
+  const result = spawnSync(CLI_BIN, ["push", imageRef], { stdio: "inherit" });
   return result.status === 0;
 }
 

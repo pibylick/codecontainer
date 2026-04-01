@@ -70,7 +70,7 @@ code-container/
 
 ### Entry Point
 
-- `src/main.ts` — CLI entry point. Parses arguments, displays TOS, routes to commands. Supports: `run`, `build`, `init`, `stop`, `remove`, `list`, `clean`.
+- `src/main.ts` — CLI entry point. Parses arguments, displays TOS, routes to commands. Supports local and experimental Kubernetes flows including: `run`, `build`, `login`, `remote`, `init`, `stop`, `remove`, `list`, `clean`.
 
 ### Core Modules
 
@@ -80,6 +80,7 @@ code-container/
 - `src/commands.ts` — Business logic for all CLI commands. Image building, container lifecycle, listing, cleaning. Agent selection and yolo mode prompts during init. Exports: `buildImage`, `init`, `runContainer`, `stopContainerForProject`, `removeContainerForProject`, `listContainers`, `cleanContainers`
 - `src/runtime.ts` — Platform detection and runtime selection. Auto-detects Apple Container on macOS ARM64, Podman on Linux, then falls back to Docker. Override via `CODE_CONTAINER_RUNTIME` env var. Exports: `runtime`, `CLI_BIN`, `isAppleContainer`, `isPodman`, `runtimeDisplayName`
 - `src/docker.ts` — Low-level container CLI wrappers. Supports Docker, Podman, and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs and `extra_packages.apt` exist, then handles image/container operations and naming via SHA1 hash.
+- `src/k8s.ts` — Experimental Kubernetes backend. Builds the K8s-tagged image, creates/removes pods and PVCs, copies project files into pod workspaces, and wraps `claude auth login` / `claude remote-control` via `kubectl exec`.
 - `src/config.ts` — Configuration paths and settings persistence. Manages `~/.code-container/` directory. Settings include agent selection and yolo mode. Re-exports appdata paths including the generated Dockerfile and extra apt packages file path.
 - `src/mounts.ts` — Volume mount management. Agent mounts computed at runtime from selection, user mounts from MOUNTS.txt. Handles migration of old MOUNTS.txt format. Exports: `ensureMountsFile`, `loadUserMounts`, `getAgentMounts`, `getCommonMounts`
 - `src/project-config.ts` — Per-project container configuration via `.codecontainer.json`. Loads, validates (Zod), and hashes project config files. Includes security confirmation gate for sensitive fields (runArgs, packages, postCreateCommand, mounts, containerEnv). Exports: `ProjectConfig`, `ProjectConfigSchema`, `loadProjectConfig`, `hashProjectConfigFile`, `hasSecuritySensitiveFields`, `confirmProjectConfig`
@@ -120,9 +121,15 @@ All user data stored in `~/.code-container/`:
 
 - `codecontainer [path]` — Run container for project (`commands.ts:runContainer`)
 - `codecontainer build` — Build container image (`commands.ts:buildImage`)
+- `codecontainer build --k8s` — Build Kubernetes image variant (`commands.ts:buildK8sImage`)
 - `codecontainer init` — Initialize config files (`commands.ts:init`)
+- `codecontainer login --k8s` — Run Claude login inside the Kubernetes pod (`commands.ts:loginK8s`)
+- `codecontainer remote --k8s` — Start Claude Remote Control inside the Kubernetes pod (`commands.ts:remoteK8s`)
 - `codecontainer sync` — Re-sync copied config files and permissions (`commands.ts:syncConfigs`)
 - `codecontainer stop` — Stop container (`commands.ts:stopContainerForProject`)
+- `codecontainer stop --k8s` — Delete the Kubernetes pod but keep its PVC (`commands.ts:stopK8sContainerForProject`)
 - `codecontainer remove` — Remove container (`commands.ts:removeContainerForProject`)
+- `codecontainer remove --k8s` — Remove the Kubernetes pod and PVC (`commands.ts:removeK8sContainerForProject`)
 - `codecontainer list` — List all containers (`commands.ts:listContainers`)
+- `codecontainer list --k8s` — List Kubernetes pods managed by codecontainer (`commands.ts:listK8sContainers`)
 - `codecontainer clean` — Remove stopped containers (`commands.ts:cleanContainers`)

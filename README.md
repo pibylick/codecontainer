@@ -111,6 +111,7 @@ During `init`, you will:
 2. Copy harness configs from `~/` to `~/.code-container/configs/`
 3. Enable/disable yolo mode (full permissions inside container)
 4. Select CA certificates from your system keystore to include in the image
+5. Configure experimental Kubernetes defaults for `--k8s` commands
 
 ### Usage
 
@@ -127,6 +128,9 @@ Inside the container, start your harness and develop as normal. Container state 
 codecontainer                  # Enter the container
 codecontainer run /path/to     # Enter container for specific project
 codecontainer build            # Build container image
+codecontainer build --k8s      # Build Kubernetes image variant
+codecontainer login --k8s      # Run Claude login flow in Kubernetes
+codecontainer remote --k8s     # Start Claude Remote Control in Kubernetes
 codecontainer init             # Configure agents, certs, and permissions
 codecontainer sync             # Re-sync config files from host
 codecontainer list             # List all containers
@@ -134,6 +138,32 @@ codecontainer stop             # Stop current project's container
 codecontainer remove           # Remove current project's container
 codecontainer clean            # Remove all stopped containers
 ```
+
+## Experimental Kubernetes Mode
+
+`codecontainer` also includes an experimental Kubernetes backend for persistent remote pods. The K8s image uses the same Dockerfile and selected CA certificates as the local image, but is tagged separately so you can work locally and on Kubernetes without image drift.
+
+Kubernetes mode currently focuses on a simple Claude Remote Control workflow:
+
+```bash
+codecontainer build --k8s
+codecontainer run --k8s
+codecontainer login --k8s
+codecontainer remote --k8s
+```
+
+What it does:
+- builds a Kubernetes-tagged image from the same base Dockerfile
+- creates a pod plus PVC for persistent agent state and workspace data
+- keeps Claude config and login state on the PVC
+- opens official `claude auth login` inside the pod, without storing your Claude token in `codecontainer`
+- starts `claude remote-control` inside the pod through a wrapper command
+
+Current limitations:
+- Kubernetes mode requires `kubectl` access to a cluster
+- local project files are copied into the pod on first run instead of being bind-mounted
+- `.codecontainer.json` mounts and `runArgs` are ignored in Kubernetes mode
+- `clean` is still local-only
 
 ## Features
 

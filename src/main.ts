@@ -3,17 +3,25 @@
 import { printError, printInfo, promptYesNo, resolveProjectPath } from "./utils";
 import {
   buildImage,
+  buildK8sImage,
   runContainer,
+  runK8sContainer,
+  loginK8s,
+  remoteK8s,
   stopContainerForProject,
+  stopK8sContainerForProject,
   removeContainerForProject,
   listContainers,
+  listK8sContainers,
   cleanContainers,
   syncConfigs,
   init,
+  removeK8sContainerForProject,
 } from "./commands";
 import { checkRuntime } from "./docker";
 import { loadSettings, saveSettings } from "./config";
 import { ensureMountsFile } from "./mounts";
+import type { K8sOverrides } from "./k8s";
 
 const TOS = `
 \x1b[33m⚠️  Security Advisory:\x1b[0m
@@ -66,6 +74,8 @@ Commands:
     (none)         Start container for current directory (default)
     run            Start container for specified project path
     build          Build the container image
+    login          Run Claude login flow inside a Kubernetes pod
+    remote         Start Claude Remote Control inside a Kubernetes pod
     init           Select agents, copy config files, and configure permissions
     sync           Re-sync config files from host to container configs
     stop           Stop the container for this project
@@ -76,10 +86,23 @@ Commands:
 Arguments:
     PROJECT_PATH    Path to the project directory (defaults to current directory)
 
+Flags:
+    --k8s                 Use the experimental Kubernetes backend
+    --namespace NAME      Override configured Kubernetes namespace
+    --context NAME        Override kubectl context
+    --registry REF        Override Kubernetes image registry
+    --workspace-size SIZE Override Kubernetes PVC size
+    --cpu VALUE           Override Kubernetes CPU request/limit
+    --memory VALUE        Override Kubernetes memory request/limit
+    --name VALUE          Session name for \`remote --k8s\`
+
 Examples:
     codecontainer                           # Start container for current directory
     codecontainer run /path/to/project      # Start container for specific project
     codecontainer build                     # Build container image
+    codecontainer build --k8s               # Build Kubernetes image
+    codecontainer login --k8s               # Log Claude into the Kubernetes pod
+    codecontainer remote --k8s              # Start Claude Remote Control in Kubernetes
     codecontainer init                      # Configure agents and permissions
     codecontainer sync                      # Re-sync config files from host
     codecontainer stop                      # Stop container for current directory
@@ -94,6 +117,19 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let command = "";
   let projectPath = "";
+  const options: K8sOverrides & { k8s?: boolean } = {};
+  const validCommands = [
+    "run",
+    "build",
+    "login",
+    "remote",
+    "init",
+    "sync",
+    "stop",
+    "remove",
+    "list",
+    "clean",
+  ];
 
   if (args.length > 0) {
     const firstArg = args[0];
@@ -101,24 +137,80 @@ async function main(): Promise<void> {
       usage();
     }
 
-    const validCommands = [
-      "run",
-      "build",
-      "init",
-      "sync",
-      "stop",
-      "remove",
-      "list",
-      "clean",
-    ];
     if (validCommands.includes(firstArg)) {
       command = firstArg;
-      if (args.length > 1) {
-        projectPath = args[1];
+      for (let i = 1; i < args.length; i++) {
+        const arg = args[i];
+        switch (arg) {
+          case "--k8s":
+            options.k8s = true;
+            break;
+          case "--namespace":
+            options.namespace = args[++i];
+            break;
+          case "--context":
+            options.context = args[++i];
+            break;
+          case "--registry":
+            options.registry = args[++i];
+            break;
+          case "--workspace-size":
+            options.workspaceSize = args[++i];
+            break;
+          case "--cpu":
+            options.cpu = args[++i];
+            break;
+          case "--memory":
+            options.memory = args[++i];
+            break;
+          case "--name":
+            options.remoteName = args[++i];
+            break;
+          default:
+            if (arg.startsWith("--")) {
+              printError(`Unknown flag: ${arg}`);
+              usage();
+            }
+            if (!projectPath) {
+              projectPath = arg;
+              break;
+            }
+            printError(`Unexpected argument: ${arg}`);
+            usage();
+        }
       }
-      if (args.length > 2) {
-        printError(`Unexpected argument: ${args[2]}`);
-        usage();
+    } else if (firstArg.startsWith("--")) {
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        switch (arg) {
+          case "--k8s":
+            options.k8s = true;
+            break;
+          case "--namespace":
+            options.namespace = args[++i];
+            break;
+          case "--context":
+            options.context = args[++i];
+            break;
+          case "--registry":
+            options.registry = args[++i];
+            break;
+          case "--workspace-size":
+            options.workspaceSize = args[++i];
+            break;
+          case "--cpu":
+            options.cpu = args[++i];
+            break;
+          case "--memory":
+            options.memory = args[++i];
+            break;
+          case "--name":
+            options.remoteName = args[++i];
+            break;
+          default:
+            printError(`Unknown flag: ${arg}`);
+            usage();
+        }
       }
     } else {
       printError(`Unknown command: ${firstArg}`);
@@ -143,29 +235,70 @@ async function main(): Promise<void> {
     return;
   }
 
-  checkRuntime();
   await init(true);
   const resolvedPath = resolveProjectPath(projectPath);
 
+  if (!options.k8s) {
+    checkRuntime();
+  }
+
   switch (command) {
     case "list":
-      listContainers();
+      if (options.k8s) {
+        listK8sContainers(options);
+      } else {
+        listContainers();
+      }
       return;
     case "clean":
+      if (options.k8s) {
+        printError("The clean command currently supports only local containers.");
+        process.exit(1);
+      }
       cleanContainers();
       return;
     case "build":
-      await buildImage();
+      if (options.k8s) {
+        await buildK8sImage(options);
+      } else {
+        await buildImage();
+      }
+      return;
+    case "login":
+      if (!options.k8s) {
+        printError("The login command currently supports only --k8s.");
+        process.exit(1);
+      }
+      loginK8s(resolvedPath, options);
+      return;
+    case "remote":
+      if (!options.k8s) {
+        printError("The remote command currently supports only --k8s.");
+        process.exit(1);
+      }
+      remoteK8s(resolvedPath, options);
       return;
     case "stop":
-      stopContainerForProject(resolvedPath);
+      if (options.k8s) {
+        stopK8sContainerForProject(resolvedPath, options);
+      } else {
+        stopContainerForProject(resolvedPath);
+      }
       return;
     case "remove":
-      removeContainerForProject(resolvedPath);
+      if (options.k8s) {
+        removeK8sContainerForProject(resolvedPath, options);
+      } else {
+        removeContainerForProject(resolvedPath);
+      }
       return;
     case "run":
     case "":
-      await runContainer(resolvedPath);
+      if (options.k8s) {
+        await runK8sContainer(resolvedPath, options);
+      } else {
+        await runContainer(resolvedPath);
+      }
       return;
   }
 }
