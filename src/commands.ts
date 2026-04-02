@@ -28,7 +28,7 @@ import {
   IMAGE_NAME,
   IMAGE_TAG,
 } from "./docker";
-import { injectGitConfigIntoContainer } from "./mounts";
+import { injectGitConfigIntoContainer, hasSshStagingMount, SSH_STAGING_PATH } from "./mounts";
 import { runtimeDisplayName } from "./runtime";
 import {
   loadSettings,
@@ -187,6 +187,20 @@ export async function init(isStartup: boolean = false): Promise<void> {
   saveSettings(settings);
 }
 
+/**
+ * Copy staged .ssh files into the container with correct ownership.
+ * SSH refuses key files owned by a different UID. Since .ssh is bind-mounted
+ * from the host (retaining host UID), we mount it to a staging path and then
+ * copy it to the real location inside the container with root ownership.
+ */
+function fixSshOwnership(containerName: string): void {
+  if (!hasSshStagingMount()) return;
+  execInContainer(containerName, [
+    "sh", "-c",
+    `rm -rf /root/.ssh && cp -a ${SSH_STAGING_PATH} /root/.ssh && chown -R root:root /root/.ssh`
+  ]);
+}
+
 export async function runContainer(projectPath: string): Promise<void> {
   const containerName = generateContainerName(projectPath);
   const projectName = path.basename(projectPath);
@@ -235,6 +249,16 @@ export async function runContainer(projectPath: string): Promise<void> {
         printInfo(`Container '${containerName}' is already running`);
         printInfo("Attaching to container...");
       }
+      // Mark all directories as git-safe inside the container. Bind-mounted
+      // projects are owned by the host UID which differs from container root,
+      // triggering CVE-2022-24765 protections. Using wildcard is fine here
+      // because the container itself is the security boundary.
+      // Written to system config (/etc/gitconfig) because the user-level
+      // .gitconfig is a bind-mounted file that cannot be atomically rewritten.
+      execInContainer(containerName, [
+        "git", "config", "--system", "safe.directory", "*"
+      ]);
+      fixSshOwnership(containerName);
       execInteractive(containerName, projectName);
       stopContainerIfLastSession(containerName, projectName);
       return;
@@ -249,8 +273,17 @@ export async function runContainer(projectPath: string): Promise<void> {
     process.exit(1);
   }
 
-  // Post-create: inject git config → install packages → run postCreateCommand
+  // Post-create: inject git config → mark project dir as safe → install packages → run postCreateCommand
   injectGitConfigIntoContainer(containerName);
+
+  // Mark all directories as git-safe inside the container. Bind-mounted
+  // projects are owned by the host UID which differs from container root,
+  // triggering CVE-2022-24765 protections. Using wildcard is fine here
+  // because the container itself is the security boundary.
+  execInContainer(containerName, [
+    "git", "config", "--system", "safe.directory", "*"
+  ]);
+  fixSshOwnership(containerName);
 
   if (projectConfig?.packages && projectConfig.packages.length > 0) {
     printInfo(`Installing project packages: ${projectConfig.packages.join(", ")}...`);

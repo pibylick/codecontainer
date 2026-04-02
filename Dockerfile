@@ -50,6 +50,10 @@ RUN apt-get update \
 # Create python symlink pointing to python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
+# Install uv (fast Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
 # Agent installation flags (set via --build-arg)
 ARG INSTALL_CLAUDE=1
 ARG INSTALL_OPENCODE=1

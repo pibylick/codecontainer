@@ -253,6 +253,9 @@ function migrateExistingMountsFile(): void {
   }
 }
 
+// Container path where .ssh is staged before being copied with correct ownership
+export const SSH_STAGING_PATH = "/root/.ssh-host";
+
 export function loadUserMounts(): string[] {
   if (!fs.existsSync(MOUNTS_PATH)) {
     return [];
@@ -261,5 +264,23 @@ export function loadUserMounts(): string[] {
   return content
     .split("\n")
     .map(line => line.trim())
-    .filter(line => line && !line.startsWith("#"));
+    .filter(line => line && !line.startsWith("#"))
+    .map(line => redirectSshMount(line));
+}
+
+/**
+ * Redirect .ssh bind mounts to a staging path. SSH refuses to use key files
+ * owned by a different user, and bind-mounted files retain the host UID.
+ * By mounting to a staging location, we can later copy with correct ownership.
+ */
+function redirectSshMount(mount: string): string {
+  return mount.replace(/:(\/root\/\.ssh)(:|$)/, `:${SSH_STAGING_PATH}$2`);
+}
+
+/**
+ * Check whether any user mount targets .ssh (and was redirected to staging).
+ */
+export function hasSshStagingMount(): boolean {
+  const mounts = loadUserMounts();
+  return mounts.some(m => m.includes(SSH_STAGING_PATH));
 }
