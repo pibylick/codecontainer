@@ -185,50 +185,31 @@ export async function ensureMountsFile(): Promise<void> {
 
   printInfo("");
   printInfo("MOUNTS.txt not found. Setting up custom mount points.");
-  printInfo("");
-  printInfo("Would you like to mount ~/.ssh (read-only)?");
-  printInfo(
-    "  Pros: Enables SSH-based git operations and remote server access inside the container. (E.g.: git push, git pull)"
-  );
-  printInfo(
-    "  Risks: Exposes your SSH private keys. Only enable if you trust the code running in your containers."
-  );
-  printInfo(
-    "  Note: This configuration is global. You may modify your mounts at any time by editing ~/.code-container/MOUNTS.txt."
-  );
-
-  const mountSsh = await promptYesNo("Mount ~/.ssh?");
-  if (mountSsh) {
-    mounts.push(`${home}/.ssh:/root/.ssh:ro`);
-  }
-
   // Offer to mount git credentials for HTTPS-based git operations
   const gitCredentials = path.join(home, ".git-credentials");
-  if (!mountSsh || fs.existsSync(gitCredentials)) {
-    printInfo("");
-    printInfo("Would you like to mount ~/.git-credentials?");
-    printInfo(
-      "  Pros: Enables HTTPS-based git push/pull inside the container."
-    );
-    printInfo(
-      "  Risks: Exposes stored git credentials. Only enable if you trust the code running in your containers."
-    );
-    printInfo(
-      "  Note: If your host uses osxkeychain or credential-manager, you need to first populate ~/.git-credentials."
-    );
-    printInfo(
-      "  Hint: Run 'git credential-store store' or set credential.helper=store temporarily and do a git fetch."
-    );
+  printInfo("");
+  printInfo("Would you like to mount ~/.git-credentials?");
+  printInfo(
+    "  Pros: Enables HTTPS-based git push/pull inside the container."
+  );
+  printInfo(
+    "  Risks: Exposes stored git credentials. Only enable if you trust the code running in your containers."
+  );
+  printInfo(
+    "  Note: If your host uses osxkeychain or credential-manager, you need to first populate ~/.git-credentials."
+  );
+  printInfo(
+    "  Hint: Run 'git credential-store store' or set credential.helper=store temporarily and do a git fetch."
+  );
 
-    const mountCreds = await promptYesNo("Mount ~/.git-credentials?");
-    if (mountCreds) {
-      // Create the file if it doesn't exist so the mount doesn't fail
-      if (!fs.existsSync(gitCredentials)) {
-        fs.writeFileSync(gitCredentials, "", { mode: 0o600 });
-        printInfo(`Created empty ${gitCredentials} — populate it with your credentials.`);
-      }
-      mounts.push(`${gitCredentials}:/root/.git-credentials`);
+  const mountCreds = await promptYesNo("Mount ~/.git-credentials?");
+  if (mountCreds) {
+    // Create the file if it doesn't exist so the mount doesn't fail
+    if (!fs.existsSync(gitCredentials)) {
+      fs.writeFileSync(gitCredentials, "", { mode: 0o600 });
+      printInfo(`Created empty ${gitCredentials} — populate it with your credentials.`);
     }
+    mounts.push(`${gitCredentials}:/root/.git-credentials`);
   }
 
   const header = "# Custom mount points (agent mounts are managed automatically)\n";

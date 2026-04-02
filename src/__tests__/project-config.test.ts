@@ -30,7 +30,7 @@ describe("loadProjectConfig", () => {
       forwardPorts: [3000, 5432],
       containerEnv: { NODE_ENV: "dev" },
       packages: ["postgresql-client"],
-      mounts: ["~/.aws:/root/.aws:ro"],
+      mounts: ["~/data:/root/data:ro"],
       runArgs: ["--cpus=4"],
       postCreateCommand: "npm install",
     }));
@@ -41,7 +41,7 @@ describe("loadProjectConfig", () => {
     expect(config!.forwardPorts).toEqual([3000, 5432]);
     expect(config!.containerEnv).toEqual({ NODE_ENV: "dev" });
     expect(config!.packages).toEqual(["postgresql-client"]);
-    expect(config!.mounts).toEqual(["~/.aws:/root/.aws:ro"]);
+    expect(config!.mounts).toEqual(["~/data:/root/data:ro"]);
     expect(config!.runArgs).toEqual(["--cpus=4"]);
     expect(config!.postCreateCommand).toBe("npm install");
   });

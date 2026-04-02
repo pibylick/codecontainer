@@ -222,7 +222,7 @@ Add a `.codecontainer.json` file to any project root to declare container settin
     "NODE_ENV": "development"
   },
   "packages": ["postgresql-client", "redis-tools"],
-  "mounts": ["~/.aws:/root/.aws:ro"],
+  "mounts": ["~/data:/root/data:ro"],
   "runArgs": ["--cpus=4"],
   "postCreateCommand": "npm install"
 }
