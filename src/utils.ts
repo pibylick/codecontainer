@@ -60,15 +60,15 @@ export function promptSelect<T extends string>(title: string, options: Array<{ l
   let cursor = defaultIndex;
 
   function render(): void {
-    process.stdout.write(`\x1b[${options.length + 2}A`);
+    process.stdout.write(`\x1b[${options.length + 2}A\x1b[J`);
     printMenu();
   }
 
   function printMenu(): void {
-    console.log(`\n${title} (↑↓ navigate, enter confirm)`);
+    process.stdout.write(`\n${title} (↑↓ navigate, enter confirm)\n`);
     options.forEach((opt, i) => {
       const pointer = i === cursor ? "\x1b[36m❯\x1b[0m" : " ";
-      console.log(`  ${pointer} ${opt.label}`);
+      process.stdout.write(`  ${pointer} ${opt.label}\n`);
     });
   }
 
@@ -125,16 +125,16 @@ export function promptMultiSelect(
   let cursor = 0;
 
   function render(): void {
-    process.stdout.write(`\x1b[${items.length + 2}A`);
+    process.stdout.write(`\x1b[${items.length + 2}A\x1b[J`);
     printMenu();
   }
 
   function printMenu(): void {
-    console.log(`\n${title} (↑↓ navigate, space toggle, a toggle all, enter confirm)`);
+    process.stdout.write(`\n${title} (↑↓ navigate, space toggle, a toggle all, enter confirm)\n`);
     items.forEach((item, i) => {
       const check = selected[i] ? "\x1b[32m✔\x1b[0m" : " ";
       const pointer = i === cursor ? "\x1b[36m❯\x1b[0m" : " ";
-      console.log(`  ${pointer} [${check}] ${item.name}`);
+      process.stdout.write(`  ${pointer} [${check}] ${item.name}\n`);
     });
   }
 
