@@ -161,4 +161,128 @@ describe("hasSecuritySensitiveFields", () => {
     const config: ProjectConfig = { containerEnv: {} };
     expect(hasSecuritySensitiveFields(config)).toBe(false);
   });
+
+  it("returns true for config with secrets", () => {
+    const config: ProjectConfig = {
+      secrets: [{ name: "api_key", file: "/tmp/key.txt" }],
+    };
+    expect(hasSecuritySensitiveFields(config)).toBe(true);
+  });
+
+  it("returns false for config with empty secrets array", () => {
+    const config: ProjectConfig = { secrets: [] };
+    expect(hasSecuritySensitiveFields(config)).toBe(false);
+  });
+
+  it("returns true for config with cmd", () => {
+    const config: ProjectConfig = { cmd: "bash runner.sh" };
+    expect(hasSecuritySensitiveFields(config)).toBe(true);
+  });
+
+  it("returns false for config with only restart", () => {
+    const config: ProjectConfig = { restart: "always" };
+    expect(hasSecuritySensitiveFields(config)).toBe(false);
+  });
+});
+
+describe("loadProjectConfig — secrets field", () => {
+  it("parses valid secrets array", () => {
+    writeConfig(JSON.stringify({
+      secrets: [
+        { name: "api_key", file: "/home/user/secrets/api.key" },
+        { name: "db-pass", file: "/tmp/db.txt" },
+      ],
+    }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).not.toBeNull();
+    expect(config!.secrets).toHaveLength(2);
+    expect(config!.secrets![0].name).toBe("api_key");
+    expect(config!.secrets![1].name).toBe("db-pass");
+  });
+
+  it("rejects secret name with path separator", () => {
+    writeConfig(JSON.stringify({
+      secrets: [{ name: "../etc/passwd", file: "/tmp/key.txt" }],
+    }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).toBeNull();
+  });
+
+  it("rejects secret name with spaces", () => {
+    writeConfig(JSON.stringify({
+      secrets: [{ name: "my key", file: "/tmp/key.txt" }],
+    }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).toBeNull();
+  });
+
+  it("rejects secret file with path traversal", () => {
+    writeConfig(JSON.stringify({
+      secrets: [{ name: "key", file: "/tmp/../etc/passwd" }],
+    }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).toBeNull();
+  });
+
+  it("accepts secret name with alphanumeric, dash, underscore", () => {
+    writeConfig(JSON.stringify({
+      secrets: [{ name: "my_secret-01", file: "/tmp/s.txt" }],
+    }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).not.toBeNull();
+    expect(config!.secrets![0].name).toBe("my_secret-01");
+  });
+});
+
+describe("loadProjectConfig — cmd field", () => {
+  it("parses cmd string", () => {
+    writeConfig(JSON.stringify({ cmd: "bash /root/runner.sh" }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).not.toBeNull();
+    expect(config!.cmd).toBe("bash /root/runner.sh");
+  });
+
+  it("allows shell operators in cmd (intentional)", () => {
+    writeConfig(JSON.stringify({ cmd: "echo hello && sleep 1" }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).not.toBeNull();
+    expect(config!.cmd).toBe("echo hello && sleep 1");
+  });
+});
+
+describe("loadProjectConfig — restart field", () => {
+  it("parses valid restart policies", () => {
+    for (const policy of ["no", "on-failure", "unless-stopped", "always"]) {
+      writeConfig(JSON.stringify({ restart: policy }));
+      const config = loadProjectConfig(tmpDir);
+      expect(config).not.toBeNull();
+      expect(config!.restart).toBe(policy);
+    }
+  });
+
+  it("rejects invalid restart policy", () => {
+    writeConfig(JSON.stringify({ restart: "never" }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).toBeNull();
+  });
+});
+
+describe("loadProjectConfig — full headless config", () => {
+  it("parses complete headless agent config", () => {
+    writeConfig(JSON.stringify({
+      name: "agent-cc",
+      cmd: "bash /root/runner.sh",
+      restart: "unless-stopped",
+      containerEnv: { RUNNER: "claude" },
+      packages: ["jq"],
+      secrets: [
+        { name: "anthropic_key", file: "/home/user/secrets/api.key" },
+      ],
+    }));
+    const config = loadProjectConfig(tmpDir);
+    expect(config).not.toBeNull();
+    expect(config!.cmd).toBe("bash /root/runner.sh");
+    expect(config!.restart).toBe("unless-stopped");
+    expect(config!.secrets).toHaveLength(1);
+  });
 });

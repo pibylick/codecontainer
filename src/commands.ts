@@ -27,8 +27,9 @@ import {
   removeContainersById,
   IMAGE_NAME,
   IMAGE_TAG,
+  type ContainerCreateOptions,
 } from "./docker";
-import { injectGitConfigIntoContainer, SSH_STAGING_PATH } from "./mounts";
+import { injectGitConfigIntoContainer } from "./mounts";
 import { runtimeDisplayName } from "./runtime";
 import {
   loadSettings,
@@ -189,32 +190,21 @@ export async function init(isStartup: boolean = false): Promise<void> {
 
 /**
  * Copy .ssh files into the container with correct ownership.
- * SSH refuses key files owned by a different UID. The .ssh directory may be
- * bind-mounted at /root/.ssh (old containers) or /root/.ssh-host (new ones).
- * We always copy to /root/.ssh-local with root ownership and configure git
- * to use that path via GIT_SSH_COMMAND in shell profiles.
+ * Delegates to /usr/local/bin/fix-ssh.sh baked into the image.
+ * The script handles both old (.ssh) and new (.ssh-host) mount paths,
+ * copies to .ssh-local with root ownership, and configures GIT_SSH_COMMAND.
  */
 function fixSshOwnership(containerName: string): void {
-  // Determine source: new containers use staging path, old ones have .ssh directly
-  const sshLocalPath = "/root/.ssh-local";
-  const script = `
-    SRC=""
-    [ -d "${SSH_STAGING_PATH}" ] && SRC="${SSH_STAGING_PATH}"
-    [ -z "$SRC" ] && [ -d "/root/.ssh" ] && SRC="/root/.ssh"
-    [ -z "$SRC" ] && exit 0
-    rm -rf ${sshLocalPath}
-    cp -a "$SRC" ${sshLocalPath}
-    chown -R root:root ${sshLocalPath}
-    chmod 700 ${sshLocalPath}
-    chmod 600 ${sshLocalPath}/*
-    SSH_CMD='export GIT_SSH_COMMAND="ssh -F /dev/null -o IdentityFile=${sshLocalPath}/id_ed25519 -o IdentityFile=${sshLocalPath}/id_rsa -o UserKnownHostsFile=${sshLocalPath}/known_hosts -o StrictHostKeyChecking=no"'
-    grep -q "ssh-local" /root/.bashrc 2>/dev/null || echo "$SSH_CMD" >> /root/.bashrc
-    grep -q "ssh-local" /root/.zshrc 2>/dev/null  || echo "$SSH_CMD" >> /root/.zshrc
-  `.trim();
-  execInContainer(containerName, ["sh", "-c", script]);
+  execInContainer(containerName, ["/usr/local/bin/fix-ssh.sh"]);
 }
 
-export async function runContainer(projectPath: string): Promise<void> {
+export interface RunContainerOptions {
+  cmd?: string;
+  restart?: string;
+  headless?: boolean;
+}
+
+export async function runContainer(projectPath: string, cliOptions?: RunContainerOptions): Promise<void> {
   const containerName = generateContainerName(projectPath);
   const projectName = path.basename(projectPath);
 
@@ -242,6 +232,27 @@ export async function runContainer(projectPath: string): Promise<void> {
     projectConfig = await confirmProjectConfig(projectConfig, projectPath);
   }
 
+  // Resolve headless options: CLI flags override .codecontainer.json
+  const cmd = cliOptions?.cmd ?? projectConfig?.cmd;
+  const restart = cliOptions?.restart ?? projectConfig?.restart;
+  const headless = !!(cliOptions?.headless || cmd);
+
+  // --cmd on existing container: prompt recreate (Docker can't change CMD after create)
+  if (cliOptions?.cmd && (containerRunning(containerName) || containerExists(containerName))) {
+    printWarning("--cmd passed but container already exists with a different CMD.");
+    printWarning("Docker does not allow changing CMD on existing containers.");
+    const shouldRecreate = await promptYesNo("Recreate container with new CMD?");
+    if (shouldRecreate) {
+      if (containerRunning(containerName)) stopContainer(containerName);
+      removeContainer(containerName);
+      // Fall through to create new container
+    } else {
+      printInfo("Keeping existing container. --cmd ignored.");
+      // Continue with existing container (cmd from CLI ignored)
+      return attachOrRunExisting(containerName, projectName, projectConfig, headless, cmd, restart);
+    }
+  }
+
   // Check for config drift on existing containers
   if (containerRunning(containerName) || containerExists(containerName)) {
     const driftResult = await checkConfigDrift(containerName, projectPath);
@@ -253,40 +264,94 @@ export async function runContainer(projectPath: string): Promise<void> {
       removeContainer(containerName);
       // Fall through to create new container
     } else {
-      // Attach to existing container
-      if (!containerRunning(containerName)) {
-        printInfo(`Starting existing container: ${containerName}`);
-        startContainer(containerName);
-        injectGitConfigIntoContainer(containerName);
-      } else {
-        printInfo(`Container '${containerName}' is already running`);
-        printInfo("Attaching to container...");
-      }
-      // Mark all directories as git-safe inside the container. Bind-mounted
-      // projects are owned by the host UID which differs from container root,
-      // triggering CVE-2022-24765 protections. Using wildcard is fine here
-      // because the container itself is the security boundary.
-      // Written to system config (/etc/gitconfig) because the user-level
-      // .gitconfig is a bind-mounted file that cannot be atomically rewritten.
-      execInContainer(containerName, [
-        "git", "config", "--system", "safe.directory", "*"
-      ]);
-      fixSshOwnership(containerName);
-      execInteractive(containerName, projectName);
-      stopContainerIfLastSession(containerName, projectName);
-      return;
+      return attachOrRunExisting(containerName, projectName, projectConfig, headless, cmd, restart);
     }
   }
 
   printInfo(`Creating new container: ${containerName}`);
   printInfo(`Project: ${projectPath}`);
 
-  if (!(await createNewContainer(containerName, projectName, projectPath, projectConfig))) {
+  const headlessOptions: ContainerCreateOptions = {
+    cmd,
+    restart,
+    secrets: cliOptions?.cmd ? projectConfig?.secrets : undefined,
+  };
+
+  if (!(await createNewContainer(containerName, projectName, projectPath, projectConfig, headlessOptions))) {
     printError("Failed to create container");
     process.exit(1);
   }
 
-  // Post-create: inject git config → mark project dir as safe → install packages → run postCreateCommand
+  postCreateSetup(containerName, projectConfig);
+
+  if (headless) {
+    printSuccess(`Container running in headless mode: ${containerName}`);
+    printInfo(`CMD: ${cmd}`);
+    printInfo(`Logs: docker logs -f ${containerName}`);
+    return;
+  }
+
+  execInteractive(containerName, projectName);
+  stopContainerIfLastSession(containerName, projectName);
+  printSuccess("Container session ended");
+}
+
+/**
+ * Attach to or start an existing container. Handles both interactive
+ * and headless modes with appropriate prompts.
+ */
+async function attachOrRunExisting(
+  containerName: string,
+  projectName: string,
+  projectConfig: ReturnType<typeof loadProjectConfig>,
+  headless: boolean,
+  cmd: string | undefined,
+  restart: string | undefined,
+): Promise<void> {
+  if (!containerRunning(containerName)) {
+    printInfo(`Starting existing container: ${containerName}`);
+    startContainer(containerName, restart);
+    injectGitConfigIntoContainer(containerName);
+  } else {
+    printInfo(`Container '${containerName}' is already running`);
+  }
+
+  // Mark all directories as git-safe inside the container. Bind-mounted
+  // projects are owned by the host UID which differs from container root,
+  // triggering CVE-2022-24765 protections. Using wildcard is fine here
+  // because the container itself is the security boundary.
+  // Written to system config (/etc/gitconfig) because the user-level
+  // .gitconfig is a bind-mounted file that cannot be atomically rewritten.
+  execInContainer(containerName, [
+    "git", "config", "--system", "safe.directory", "*"
+  ]);
+  fixSshOwnership(containerName);
+
+  if (headless) {
+    printInfo(`Container '${containerName}' is running in headless mode.`);
+    printInfo(`CMD: ${cmd}`);
+    printInfo(`Logs: docker logs -f ${containerName}`);
+
+    const attach = await promptYesNo("Attach interactive shell?");
+    if (attach) {
+      execInteractive(containerName, projectName);
+      // Don't stop container after detach — headless keeps running
+    }
+    return;
+  }
+
+  printInfo("Attaching to container...");
+  execInteractive(containerName, projectName);
+  stopContainerIfLastSession(containerName, projectName);
+}
+
+/**
+ * Common post-create setup: git config, SSH, packages, postCreateCommand.
+ */
+function postCreateSetup(
+  containerName: string,
+  projectConfig: ReturnType<typeof loadProjectConfig>,
+): void {
   injectGitConfigIntoContainer(containerName);
 
   // Mark all directories as git-safe inside the container. Bind-mounted
@@ -317,10 +382,6 @@ export async function runContainer(projectPath: string): Promise<void> {
       printWarning("postCreateCommand failed, continuing");
     }
   }
-
-  execInteractive(containerName, projectName);
-  stopContainerIfLastSession(containerName, projectName);
-  printSuccess("Container session ended");
 }
 
 export async function runK8sContainer(projectPath: string, overrides: K8sOverrides = {}): Promise<void> {

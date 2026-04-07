@@ -16,6 +16,14 @@ export const ProjectConfigSchema = z.object({
   mounts: z.array(z.string()).optional(),
   runArgs: z.array(z.string()).optional(),
   postCreateCommand: z.string().optional(),
+  secrets: z.array(z.object({
+    name: z.string()
+      .regex(/^[a-zA-Z0-9_-]+$/, "secret name: only alphanumeric, dash, underscore"),
+    file: z.string()
+      .refine(f => !f.includes('..'), "secret file: path traversal not allowed"),
+  })).optional(),
+  cmd: z.string().optional(),
+  restart: z.enum(["no", "on-failure", "unless-stopped", "always"]).optional(),
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
@@ -91,6 +99,8 @@ const SECURITY_SENSITIVE_FIELDS: (keyof ProjectConfig)[] = [
   "postCreateCommand",
   "mounts",
   "containerEnv",
+  "secrets",
+  "cmd",
 ];
 
 export function hasSecuritySensitiveFields(config: ProjectConfig): boolean {
@@ -148,6 +158,12 @@ export async function confirmProjectConfig(
   }
   if (config.containerEnv && Object.keys(config.containerEnv).length > 0) {
     printInfo(`  containerEnv: ${JSON.stringify(config.containerEnv)}`);
+  }
+  if (config.secrets && config.secrets.length > 0) {
+    printInfo(`  secrets: ${JSON.stringify(config.secrets)}`);
+  }
+  if (config.cmd) {
+    printInfo(`  cmd: "${config.cmd}"`);
   }
   printInfo("");
 
