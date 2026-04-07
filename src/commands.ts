@@ -28,7 +28,7 @@ import {
   IMAGE_NAME,
   IMAGE_TAG,
 } from "./docker";
-import { injectGitConfigIntoContainer, SSH_STAGING_PATH } from "./mounts";
+import { injectGitConfigIntoContainer } from "./mounts";
 import { runtimeDisplayName } from "./runtime";
 import {
   loadSettings,
@@ -189,29 +189,12 @@ export async function init(isStartup: boolean = false): Promise<void> {
 
 /**
  * Copy .ssh files into the container with correct ownership.
- * SSH refuses key files owned by a different UID. The .ssh directory may be
- * bind-mounted at /root/.ssh (old containers) or /root/.ssh-host (new ones).
- * We always copy to /root/.ssh-local with root ownership and configure git
- * to use that path via GIT_SSH_COMMAND in shell profiles.
+ * Delegates to /usr/local/bin/fix-ssh.sh baked into the image.
+ * The script handles both old (.ssh) and new (.ssh-host) mount paths,
+ * copies to .ssh-local with root ownership, and configures GIT_SSH_COMMAND.
  */
 function fixSshOwnership(containerName: string): void {
-  // Determine source: new containers use staging path, old ones have .ssh directly
-  const sshLocalPath = "/root/.ssh-local";
-  const script = `
-    SRC=""
-    [ -d "${SSH_STAGING_PATH}" ] && SRC="${SSH_STAGING_PATH}"
-    [ -z "$SRC" ] && [ -d "/root/.ssh" ] && SRC="/root/.ssh"
-    [ -z "$SRC" ] && exit 0
-    rm -rf ${sshLocalPath}
-    cp -a "$SRC" ${sshLocalPath}
-    chown -R root:root ${sshLocalPath}
-    chmod 700 ${sshLocalPath}
-    chmod 600 ${sshLocalPath}/*
-    SSH_CMD='export GIT_SSH_COMMAND="ssh -F /dev/null -o IdentityFile=${sshLocalPath}/id_ed25519 -o IdentityFile=${sshLocalPath}/id_rsa -o UserKnownHostsFile=${sshLocalPath}/known_hosts -o StrictHostKeyChecking=no"'
-    grep -q "ssh-local" /root/.bashrc 2>/dev/null || echo "$SSH_CMD" >> /root/.bashrc
-    grep -q "ssh-local" /root/.zshrc 2>/dev/null  || echo "$SSH_CMD" >> /root/.zshrc
-  `.trim();
-  execInContainer(containerName, ["sh", "-c", script]);
+  execInContainer(containerName, ["/usr/local/bin/fix-ssh.sh"]);
 }
 
 export async function runContainer(projectPath: string): Promise<void> {

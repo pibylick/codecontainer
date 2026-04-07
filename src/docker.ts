@@ -100,6 +100,16 @@ function ensureBuildAssets(): void {
       "# One apt package per line, e.g.:\n# postgresql-client\n# redis-tools\n"
     );
   }
+
+  // Copy entrypoint scripts to build context (Dockerfile COPY requires them)
+  const PACKAGED_SCRIPTS_DIR = path.resolve(__dirname, "..", "scripts");
+  for (const script of ["fix-ssh.sh", "codecontainer-entrypoint.sh"]) {
+    const src = path.join(PACKAGED_SCRIPTS_DIR, script);
+    const dst = path.join(APPDATA_DIR, script);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dst);
+    }
+  }
 }
 
 export function buildImageRaw(agentIds?: string[], memoryMB?: number, imageRef: string = `${IMAGE_NAME}:${IMAGE_TAG}`): boolean {
