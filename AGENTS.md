@@ -77,18 +77,20 @@ code-container/
 - `src/paths.ts` — Shared path constants for the application data directory. No imports from other project modules (breaks circular deps). Exports: `APPDATA_DIR`, `CONFIGS_DIR`, `DOCKERFILE_PATH`, `EXTRA_PACKAGES_APT_PATH`, `SETTINGS_PATH`, `MOUNTS_PATH`, `FLAGS_PATH`
 - `src/agents.ts` — Agent registry and permissions. Defines supported AI agents (Claude Code, OpenCode, Codex CLI, Gemini CLI) with their config sources, mount mappings, and permission configs. Exports: `AGENTS`, `ALL_AGENT_IDS`, `AgentDefinition`, `PermissionConfig`, `getSelectedAgents`, `applyPermissions`
 - `src/certs.ts` — System certificate discovery and export. Lets users select CA certificates from the host keystore and writes them to `~/.code-container/certs/` for inclusion in the image. Exports: `SystemCert`, `getSystemCerts`, `selectAndExportCerts`, `hasCerts`
-- `src/commands.ts` — Business logic for all CLI commands. Image building, container lifecycle, listing, cleaning. Agent selection and yolo mode prompts during init. Exports: `buildImage`, `init`, `runContainer`, `stopContainerForProject`, `removeContainerForProject`, `listContainers`, `cleanContainers`
+- `src/commands.ts` — Business logic for all CLI commands. Image building, container lifecycle, listing, cleaning. Agent selection and yolo mode prompts during init. Headless mode support with attach prompt for running containers. Exports: `buildImage`, `init`, `runContainer`, `RunContainerOptions`, `stopContainerForProject`, `removeContainerForProject`, `listContainers`, `cleanContainers`
 - `src/runtime.ts` — Platform detection and runtime selection. Auto-detects Apple Container on macOS ARM64, Podman on Linux, then falls back to Docker. Override via `CODE_CONTAINER_RUNTIME` env var. Exports: `runtime`, `CLI_BIN`, `isAppleContainer`, `isPodman`, `runtimeDisplayName`
-- `src/docker.ts` — Low-level container CLI wrappers. Supports Docker, Podman, and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs and `extra_packages.apt` exist, then handles image/container operations and naming via SHA1 hash.
+- `src/docker.ts` — Low-level container CLI wrappers. Supports Docker, Podman, and Apple Container backends via runtime.ts. Syncs the packaged base Dockerfile, ensures build assets like certs, `extra_packages.apt`, and entrypoint scripts exist, then handles image/container operations and naming via SHA1 hash. Supports headless options: secrets mounts, restart policy, CMD override. Exports: `ContainerCreateOptions`
 - `src/k8s.ts` — Experimental Kubernetes backend. Builds the K8s-tagged image, creates/removes pods and PVCs, copies project files into pod workspaces, and wraps `claude auth login` / `claude remote-control` via `kubectl exec`.
 - `src/config.ts` — Configuration paths and settings persistence. Manages `~/.code-container/` directory. Settings include agent selection and yolo mode. Re-exports appdata paths including the generated Dockerfile and extra apt packages file path.
 - `src/mounts.ts` — Volume mount management. Agent mounts computed at runtime from selection, user mounts from MOUNTS.txt. Handles migration of old MOUNTS.txt format. Exports: `ensureMountsFile`, `loadUserMounts`, `getAgentMounts`, `getCommonMounts`
-- `src/project-config.ts` — Per-project container configuration via `.codecontainer.json`. Loads, validates (Zod), and hashes project config files. Includes security confirmation gate for sensitive fields (runArgs, packages, postCreateCommand, mounts, containerEnv). Exports: `ProjectConfig`, `ProjectConfigSchema`, `loadProjectConfig`, `hashProjectConfigFile`, `hasSecuritySensitiveFields`, `confirmProjectConfig`
+- `src/project-config.ts` — Per-project container configuration via `.codecontainer.json`. Loads, validates (Zod), and hashes project config files. Includes security confirmation gate for sensitive fields (runArgs, packages, postCreateCommand, mounts, containerEnv, secrets, cmd). Supports headless mode fields: secrets, cmd, restart. Exports: `ProjectConfig`, `ProjectConfigSchema`, `loadProjectConfig`, `hashProjectConfigFile`, `hasSecuritySensitiveFields`, `confirmProjectConfig`
 - `src/flags.ts` — Custom Docker flags loader from `DOCKER_FLAGS.txt`. Uses shell-quote for safe parsing. Exports: `loadFlags`
 - `src/utils.ts` — Colored console output and interactive prompts. Exports include print helpers, selection prompts, and `resolveProjectPath`
 
 ## Scripts Index (`scripts/`)
 
+- `scripts/fix-ssh.sh` — Shared SSH key setup script used by entrypoint and commands.ts. Copies host SSH keys to /root/.ssh-local with correct ownership/permissions.
+- `scripts/codecontainer-entrypoint.sh` — Idempotent entrypoint run on every container start. Delegates SSH setup to fix-ssh.sh, configures git safe.directory.
 - `scripts/postinstall.js` — NPM post-install hook. Creates `~/.code-container/` structure, syncs the generated base Dockerfile, and initializes `extra_packages.apt`.
 - `scripts/migrate.sh` — Migrates config files from old shell script location to new `~/.code-container/configs/`.
 - `scripts/cleanup.sh` — Removes old config files from project root after migration.
@@ -120,7 +122,7 @@ All user data stored in `~/.code-container/`:
 
 ## CLI Commands
 
-- `codecontainer [path]` — Run container for project (`commands.ts:runContainer`)
+- `codecontainer [path]` — Run container for project (`commands.ts:runContainer`). Supports `--headless`, `--cmd`, `--restart` flags for headless mode.
 - `codecontainer build` — Build container image (`commands.ts:buildImage`)
 - `codecontainer build --k8s` — Build Kubernetes image variant (`commands.ts:buildK8sImage`)
 - `codecontainer init` — Initialize config files (`commands.ts:init`)
