@@ -184,6 +184,11 @@ export function containerRunning(containerName: string): boolean {
 }
 
 export function stopContainer(containerName: string): void {
+  // Reset restart policy before stopping so Docker doesn't restart the container
+  if (!isAppleContainer()) {
+    spawnSync(CLI_BIN, ["update", "--restart", "no", containerName], { stdio: "pipe" });
+  }
+
   if (isAppleContainer()) {
     spawnSync(CLI_BIN, ["stop", "--time", "3", containerName], { stdio: "inherit" });
   } else if (isPodman()) {
@@ -193,8 +198,13 @@ export function stopContainer(containerName: string): void {
   }
 }
 
-export function startContainer(containerName: string): void {
+export function startContainer(containerName: string, restartPolicy?: string): void {
   spawnSync(CLI_BIN, ["start", containerName], { stdio: "inherit" });
+
+  // Restore restart policy after start (stopContainer resets it to "no")
+  if (restartPolicy && !isAppleContainer()) {
+    spawnSync(CLI_BIN, ["update", "--restart", restartPolicy, containerName], { stdio: "pipe" });
+  }
 }
 
 export function removeContainer(containerName: string): void {
@@ -223,11 +233,18 @@ export async function findAvailablePort(preferred: number, range: number = 100):
   return null;
 }
 
+export interface ContainerCreateOptions {
+  cmd?: string;
+  restart?: string;
+  secrets?: Array<{ name: string; file: string }>;
+}
+
 export async function createNewContainer(
   containerName: string,
   projectName: string,
   projectPath: string,
-  projectConfig?: ProjectConfig | null
+  projectConfig?: ProjectConfig | null,
+  headlessOptions?: ContainerCreateOptions
 ): Promise<boolean> {
   const mounts = getMounts(projectPath, projectName);
   const settings = loadSettings();
@@ -301,6 +318,36 @@ export async function createNewContainer(
     printWarning("runArgs are not supported on Apple Container, skipping");
   }
 
+  // Secrets as read-only volume mounts
+  const secrets = headlessOptions?.secrets ?? projectConfig?.secrets;
+  if (secrets && secrets.length > 0) {
+    if (isAppleContainer()) {
+      printWarning("secrets are not supported on Apple Container, skipping");
+    } else {
+      for (const secret of secrets) {
+        if (!fs.existsSync(secret.file)) {
+          printError(`Secret file not found: ${secret.file}`);
+          process.exit(1);
+        }
+        if (!fs.statSync(secret.file).isFile()) {
+          printError(`Secret path is not a file: ${secret.file}`);
+          process.exit(1);
+        }
+        args.push("-v", `${secret.file}:/run/secrets/${secret.name}:ro`);
+      }
+    }
+  }
+
+  // Restart policy (Docker/Podman only)
+  const restart = headlessOptions?.restart ?? projectConfig?.restart;
+  if (restart) {
+    if (isAppleContainer()) {
+      printWarning("restart policy is not supported on Apple Container, skipping");
+    } else {
+      args.push("--restart", restart);
+    }
+  }
+
   // Store config hash as label for drift detection
   const { hashProjectConfigFile } = await import("./project-config");
   const configHash = hashProjectConfigFile(projectPath);
@@ -308,7 +355,13 @@ export async function createNewContainer(
     args.push("--label", `codecontainer.config-hash=${configHash}`);
   }
 
-  args.push(`${IMAGE_NAME}:${IMAGE_TAG}`, "sleep", "infinity");
+  // CMD: headless cmd overrides default sleep infinity
+  const cmd = headlessOptions?.cmd ?? projectConfig?.cmd;
+  if (cmd) {
+    args.push(`${IMAGE_NAME}:${IMAGE_TAG}`, "bash", "-c", cmd);
+  } else {
+    args.push(`${IMAGE_NAME}:${IMAGE_TAG}`, "sleep", "infinity");
+  }
 
   const result = spawnSync(CLI_BIN, args, { stdio: "inherit" });
   return result.status === 0;
