@@ -17,6 +17,7 @@ import {
   syncConfigs,
   init,
   removeK8sContainerForProject,
+  type RunContainerOptions,
 } from "./commands";
 import { checkRuntime } from "./docker";
 import { loadSettings, saveSettings } from "./config";
@@ -87,6 +88,9 @@ Arguments:
     PROJECT_PATH    Path to the project directory (defaults to current directory)
 
 Flags:
+    --headless            Run container in background (no interactive shell)
+    --cmd "COMMAND"       Override container CMD (implies --headless)
+    --restart POLICY      Docker restart policy (no|on-failure|unless-stopped|always)
     --k8s                 Use the experimental Kubernetes backend
     --namespace NAME      Override configured Kubernetes namespace
     --context NAME        Override kubectl context
@@ -99,6 +103,9 @@ Flags:
 Examples:
     codecontainer                           # Start container for current directory
     codecontainer run /path/to/project      # Start container for specific project
+    codecontainer run --cmd "bash runner.sh" # Run container in headless mode
+    codecontainer run --headless            # Start headless (uses cmd from .codecontainer.json)
+    codecontainer run --restart unless-stopped  # Set restart policy
     codecontainer build                     # Build container image
     codecontainer build --k8s               # Build Kubernetes image
     codecontainer login --k8s               # Log Claude into the Kubernetes pod
@@ -117,7 +124,7 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let command = "";
   let projectPath = "";
-  const options: K8sOverrides & { k8s?: boolean } = {};
+  const options: K8sOverrides & { k8s?: boolean } & RunContainerOptions = {};
   const validCommands = [
     "run",
     "build",
@@ -142,6 +149,15 @@ async function main(): Promise<void> {
       for (let i = 1; i < args.length; i++) {
         const arg = args[i];
         switch (arg) {
+          case "--headless":
+            options.headless = true;
+            break;
+          case "--cmd":
+            options.cmd = args[++i];
+            break;
+          case "--restart":
+            options.restart = args[++i];
+            break;
           case "--k8s":
             options.k8s = true;
             break;
@@ -183,6 +199,15 @@ async function main(): Promise<void> {
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         switch (arg) {
+          case "--headless":
+            options.headless = true;
+            break;
+          case "--cmd":
+            options.cmd = args[++i];
+            break;
+          case "--restart":
+            options.restart = args[++i];
+            break;
           case "--k8s":
             options.k8s = true;
             break;
@@ -297,7 +322,7 @@ async function main(): Promise<void> {
       if (options.k8s) {
         await runK8sContainer(resolvedPath, options);
       } else {
-        await runContainer(resolvedPath);
+        await runContainer(resolvedPath, options);
       }
       return;
   }
