@@ -6,6 +6,7 @@ import { AGENTS, getSelectedAgents } from "./agents";
 import type { Settings } from "./config";
 import type { ProjectConfig } from "./project-config";
 import { IMAGE_NAME, IMAGE_TAG, buildImageRaw, pushImageRaw } from "./docker";
+import { CONFIGS_DIR } from "./paths";
 import { printError, printInfo, printSuccess, printWarning } from "./utils";
 
 export interface K8sOverrides {
@@ -22,6 +23,7 @@ interface ResolvedK8sConfig {
   namespace: string;
   context: string;
   registry: string;
+  imagePullSecret: string;
   workspaceSize: string;
   cpu: string;
   memory: string;
@@ -34,6 +36,7 @@ function resolveK8sConfig(settings: Settings, overrides: K8sOverrides = {}): Res
     namespace: overrides.namespace ?? settings.k8s.namespace,
     context: overrides.context ?? settings.k8s.context,
     registry: overrides.registry ?? settings.k8s.registry,
+    imagePullSecret: settings.k8s.imagePullSecret,
     workspaceSize: overrides.workspaceSize ?? settings.k8s.workspaceSize,
     cpu: overrides.cpu ?? settings.k8s.cpu,
     memory: overrides.memory ?? settings.k8s.memory,
@@ -46,6 +49,36 @@ function kubectlArgs(config: ResolvedK8sConfig): string[] {
 
 function spawnKubectl(config: ResolvedK8sConfig, args: string[], options: SpawnSyncOptions = {}) {
   return spawnSync("kubectl", [...kubectlArgs(config), ...args], options);
+}
+
+export function secretExists(
+  settings: Settings,
+  secretName: string,
+  overrides: K8sOverrides = {},
+): boolean {
+  const config = resolveK8sConfig(settings, overrides);
+  const result = spawnKubectl(config, ["get", "secret", secretName], { stdio: "pipe" });
+  return result.status === 0;
+}
+
+export function createImagePullSecret(
+  settings: Settings,
+  secretName: string,
+  server: string,
+  username: string,
+  password: string,
+  overrides: K8sOverrides = {},
+): boolean {
+  const config = resolveK8sConfig(settings, overrides);
+  // Delete existing secret if present (ignore errors)
+  spawnKubectl(config, ["delete", "secret", secretName, "--ignore-not-found"], { stdio: "pipe" });
+  const result = spawnKubectl(config, [
+    "create", "secret", "docker-registry", secretName,
+    `--docker-server=${server}`,
+    `--docker-username=${username}`,
+    `--docker-password=${password}`,
+  ], { stdio: "inherit" });
+  return result.status === 0;
 }
 
 function resourceHash(projectPath: string): string {
@@ -133,6 +166,9 @@ function podManifest(projectPath: string, settings: Settings, projectConfig: Pro
     .map(([key, value]) => `        - name: ${key}\n          value: ${JSON.stringify(value)}`)
     .join("\n");
   const hostname = projectConfig?.name ? `  hostname: ${sanitizeName(projectConfig.name).slice(0, 63)}\n` : "";
+  const imagePullSecrets = config.imagePullSecret
+    ? `  imagePullSecrets:\n    - name: ${config.imagePullSecret}\n`
+    : "";
 
   return `apiVersion: v1
 kind: PersistentVolumeClaim
@@ -156,7 +192,7 @@ metadata:
     app.kubernetes.io/managed-by: codecontainer
     app.kubernetes.io/part-of: codecontainer
 spec:
-${hostname}  restartPolicy: Always
+${hostname}${imagePullSecrets}  restartPolicy: Always
   containers:
     - name: codecontainer
       image: ${imageRef}
@@ -235,8 +271,8 @@ function ensurePodRunning(settings: Settings, projectPath: string, overrides: K8
 
 export function buildK8sImage(settings: Settings, agentIds?: string[], memoryMB?: number, overrides: K8sOverrides = {}): void {
   const imageRef = getK8sImageRef(settings, overrides);
-  printInfo(`Building Kubernetes image: ${imageRef}`);
-  if (!buildImageRaw(agentIds, memoryMB, imageRef)) {
+  printInfo(`Building Kubernetes image: ${imageRef} (linux/amd64)`);
+  if (!buildImageRaw(agentIds, memoryMB, imageRef, "amd64")) {
     printError("Failed to build Kubernetes image");
     process.exit(1);
   }
@@ -247,13 +283,24 @@ export function buildK8sImage(settings: Settings, agentIds?: string[], memoryMB?
     return;
   }
 
+  pushK8sImage(settings, overrides);
+}
+
+export function pushK8sImage(settings: Settings, overrides: K8sOverrides = {}): void {
+  const config = resolveK8sConfig(settings, overrides);
+  if (!config.registry) {
+    printError("No Kubernetes registry configured. Set registry with: codecontainer init");
+    process.exit(1);
+  }
+
+  const imageRef = getK8sImageRef(settings, overrides);
   printInfo(`Pushing Kubernetes image: ${imageRef}`);
   if (!pushImageRaw(imageRef)) {
     printError("Failed to push Kubernetes image");
     process.exit(1);
   }
 
-  printSuccess("Kubernetes image built and pushed successfully");
+  printSuccess("Kubernetes image pushed successfully");
 }
 
 export function k8sPodExists(settings: Settings, projectPath: string, overrides: K8sOverrides = {}): boolean {
@@ -265,6 +312,77 @@ export function k8sPodExists(settings: Settings, projectPath: string, overrides:
 
 function remoteProjectPath(projectPath: string): string {
   return `/workspace/${path.basename(projectPath)}`;
+}
+
+function kubectlCp(config: ResolvedK8sConfig, localPath: string, podName: string, remotePath: string): boolean {
+  const dest = `${config.namespace}/${podName}:${remotePath}`;
+  const args = config.context
+    ? ["--context", config.context, "cp", localPath, dest]
+    : ["cp", localPath, dest];
+  return spawnSync("kubectl", args, { stdio: "pipe" }).status === 0;
+}
+
+function copyClaudeConfigsToPod(config: ResolvedK8sConfig, podName: string): void {
+  const home = process.env.HOME || "/root";
+  const claudeDir = path.join(home, ".claude");
+
+  // CLAUDE.md — global instructions
+  const claudeMd = path.join(claudeDir, "CLAUDE.md");
+  if (fs.existsSync(claudeMd)) {
+    spawnKubectl(config, ["exec", podName, "--", "mkdir", "-p", "/root/.claude/plugins"], { stdio: "pipe" });
+    if (kubectlCp(config, claudeMd, podName, "/root/.claude/CLAUDE.md")) {
+      printInfo("Copied CLAUDE.md to pod");
+    }
+  }
+
+  // known_marketplaces.json — marketplace registry with paths rewritten for container
+  const marketplaces = path.join(claudeDir, "plugins", "known_marketplaces.json");
+  if (fs.existsSync(marketplaces)) {
+    spawnKubectl(config, ["exec", podName, "--", "mkdir", "-p", "/root/.claude/plugins"], { stdio: "pipe" });
+    const raw = fs.readFileSync(marketplaces, "utf-8");
+    const data = JSON.parse(raw);
+    for (const key of Object.keys(data)) {
+      if (data[key].installLocation) {
+        data[key].installLocation = data[key].installLocation.replace(
+          /^.*?\/\.claude\//,
+          "/root/.claude/",
+        );
+      }
+    }
+    const rewritten = JSON.stringify(data, null, 2);
+    const encoded = Buffer.from(rewritten, "utf-8").toString("base64");
+    const writeResult = spawnKubectl(config, [
+      "exec", podName, "--", "sh", "-c",
+      `printf '%s' '${encoded}' | base64 -d > /root/.claude/plugins/known_marketplaces.json`,
+    ], { stdio: "inherit" });
+    if (writeResult.status === 0) {
+      printInfo("Copied marketplace registry to pod (paths rewritten)");
+    }
+  }
+
+  // Install user-scoped plugins from host's installed_plugins.json
+  const installedPlugins = path.join(claudeDir, "plugins", "installed_plugins.json");
+  if (fs.existsSync(installedPlugins)) {
+    const pluginsRaw = fs.readFileSync(installedPlugins, "utf-8");
+    const pluginsData = JSON.parse(pluginsRaw);
+    const plugins: Record<string, any[]> = pluginsData.plugins ?? {};
+    const userPlugins: string[] = [];
+    for (const [key, installs] of Object.entries(plugins)) {
+      const hasUserScope = installs.some((i: any) => i.scope === "user");
+      if (hasUserScope) {
+        // key format: "plugin-name@marketplace-name"
+        userPlugins.push(key);
+      }
+    }
+    if (userPlugins.length > 0) {
+      printInfo(`Installing ${userPlugins.length} plugin(s) in pod...`);
+      for (const plugin of userPlugins) {
+        const [pluginName, marketplace] = plugin.split("@");
+        const installCmd = `claude plugin install "${pluginName}" --marketplace "${marketplace}" -y 2>/dev/null || true`;
+        spawnKubectl(config, ["exec", podName, "--", "sh", "-c", installCmd], { stdio: "inherit" });
+      }
+    }
+  }
 }
 
 function copyProjectToPod(config: ResolvedK8sConfig, projectPath: string): void {
@@ -325,6 +443,7 @@ export function runK8sPod(settings: Settings, projectPath: string, projectConfig
   }
 
   ensurePodRunning(settings, projectPath, overrides);
+  copyClaudeConfigsToPod(config, podName);
   copyProjectToPod(config, projectPath);
 
   if (projectConfig?.packages && projectConfig.packages.length > 0) {
@@ -356,17 +475,29 @@ export function execK8sShell(settings: Settings, projectPath: string, overrides:
 export function execK8sLogin(settings: Settings, projectPath: string, overrides: K8sOverrides = {}): void {
   const config = ensurePodRunning(settings, projectPath, overrides);
   const podName = generateK8sResourceName(projectPath);
-  spawnKubectl(config, ["exec", "-it", podName, "--", "claude", "auth", "login"], { stdio: "inherit" });
+  printInfo("Opening interactive shell in pod. Run: claude auth login");
+  spawnKubectl(config, ["exec", "-it", podName, "--", "/bin/bash"], { stdio: "inherit" });
 }
 
 export function execK8sRemote(settings: Settings, projectPath: string, overrides: K8sOverrides = {}): void {
   const config = ensurePodRunning(settings, projectPath, overrides);
   const podName = generateK8sResourceName(projectPath);
-  const args = ["exec", "-it", podName, "--", "claude", "remote-control"];
+
+  let remoteCmd = "claude remote-control";
   if (overrides.remoteName) {
-    args.push("--name", overrides.remoteName);
+    remoteCmd += ` --name ${shellEscape(overrides.remoteName)}`;
   }
-  spawnKubectl(config, args, { stdio: "inherit" });
+
+  const tmuxSession = "remote-control";
+
+  // Kill existing tmux session if present
+  spawnKubectl(config, ["exec", podName, "--", "tmux", "kill-session", "-t", tmuxSession], { stdio: "pipe" });
+
+  // Start in tmux and attach so user can confirm the interactive prompt, then detach with Ctrl+B, D
+  printInfo("Starting Remote Control in tmux. After confirming, press Ctrl+B then D to detach.");
+  spawnKubectl(config, ["exec", "-it", podName, "--", "tmux", "new-session", "-s", tmuxSession, remoteCmd], { stdio: "inherit" });
+
+  printInfo(`To reattach: codecontainer login --k8s, then: tmux attach -t ${tmuxSession}`);
 }
 
 export function listK8sPods(settings: Settings, overrides: K8sOverrides = {}): void {

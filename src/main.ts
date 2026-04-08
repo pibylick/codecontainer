@@ -4,6 +4,7 @@ import { printError, printInfo, promptYesNo, resolveProjectPath } from "./utils"
 import {
   buildImage,
   buildK8sImage,
+  pushK8sImage,
   runContainer,
   runK8sContainer,
   loginK8s,
@@ -74,6 +75,7 @@ Commands:
     (none)         Start container for current directory (default)
     run            Start container for specified project path
     build          Build the container image
+    push           Push a previously built Kubernetes image to the registry
     login          Run Claude login flow inside a Kubernetes pod
     remote         Start Claude Remote Control inside a Kubernetes pod
     init           Select agents, copy config files, and configure permissions
@@ -99,8 +101,10 @@ Flags:
 Examples:
     codecontainer                           # Start container for current directory
     codecontainer run /path/to/project      # Start container for specific project
+    codecontainer run --k8s                 # Start Kubernetes pod for current directory
     codecontainer build                     # Build container image
     codecontainer build --k8s               # Build Kubernetes image
+    codecontainer push --k8s                # Push Kubernetes image to registry
     codecontainer login --k8s               # Log Claude into the Kubernetes pod
     codecontainer remote --k8s              # Start Claude Remote Control in Kubernetes
     codecontainer init                      # Configure agents and permissions
@@ -121,6 +125,7 @@ async function main(): Promise<void> {
   const validCommands = [
     "run",
     "build",
+    "push",
     "login",
     "remote",
     "init",
@@ -263,6 +268,13 @@ async function main(): Promise<void> {
       } else {
         await buildImage();
       }
+      return;
+    case "push":
+      if (!options.k8s) {
+        printError("The push command currently supports only --k8s.");
+        process.exit(1);
+      }
+      pushK8sImage(options);
       return;
     case "login":
       if (!options.k8s) {

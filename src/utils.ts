@@ -56,6 +56,51 @@ export function promptInput(question: string, defaultValue?: string): Promise<st
   });
 }
 
+export function promptSecret(question: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(`${question}: `);
+    if (!process.stdin.isTTY) {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      rl.question("", (answer) => { rl.close(); resolve(answer.trim()); });
+      return;
+    }
+
+    let input = "";
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+
+    const onKey = (key: string): void => {
+      if (key === "\x03") {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener("data", onKey);
+        process.stdout.write("\n");
+        process.exit(0);
+      }
+      if (key === "\r" || key === "\n") {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener("data", onKey);
+        process.stdout.write("\n");
+        resolve(input.trim());
+        return;
+      }
+      if (key === "\x7f" || key === "\b") {
+        if (input.length > 0) {
+          input = input.slice(0, -1);
+          process.stdout.write("\b \b");
+        }
+        return;
+      }
+      input += key;
+      process.stdout.write("*".repeat(key.length));
+    };
+
+    process.stdin.on("data", onKey);
+  });
+}
+
 export function promptSelect<T extends string>(title: string, options: Array<{ label: string; value: T }>, defaultIndex: number = 0): Promise<T> {
   let cursor = defaultIndex;
 

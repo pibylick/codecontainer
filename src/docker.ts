@@ -102,11 +102,17 @@ function ensureBuildAssets(): void {
   }
 }
 
-export function buildImageRaw(agentIds?: string[], memoryMB?: number, imageRef: string = `${IMAGE_NAME}:${IMAGE_TAG}`): boolean {
+export function buildImageRaw(agentIds?: string[], memoryMB?: number, imageRef: string = `${IMAGE_NAME}:${IMAGE_TAG}`, targetArch?: string): boolean {
   ensureDockerfile();
   const args = ["build", "-t", imageRef];
   if (isAppleContainer()) {
     args.push("-m", `${memoryMB || 4096}MB`);
+    args.push("--dns", "8.8.8.8");
+    if (targetArch) {
+      args.push("--arch", targetArch);
+    }
+  } else if (targetArch) {
+    args.push("--platform", `linux/${targetArch}`);
   }
   if (agentIds) {
     const agentBuildArgMap: Record<string, string> = {
@@ -125,6 +131,10 @@ export function buildImageRaw(agentIds?: string[], memoryMB?: number, imageRef: 
 }
 
 export function pushImageRaw(imageRef: string): boolean {
+  if (isAppleContainer()) {
+    const result = spawnSync(CLI_BIN, ["image", "push", imageRef], { stdio: "inherit" });
+    return result.status === 0;
+  }
   const result = spawnSync(CLI_BIN, ["push", imageRef], { stdio: "inherit" });
   return result.status === 0;
 }

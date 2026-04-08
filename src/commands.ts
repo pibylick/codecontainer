@@ -9,6 +9,7 @@ import {
   promptAgentSelection,
   promptSelect,
   promptInput,
+  promptSecret,
 } from "./utils";
 import {
   generateContainerName,
@@ -44,6 +45,10 @@ import { getContainerLabel, execInContainer } from "./docker";
 import {
   type K8sOverrides,
   buildK8sImage as buildK8sImageRaw,
+  pushK8sImage as pushK8sImageRaw,
+  secretExists,
+  createImagePullSecret,
+  k8sPodExists,
   runK8sPod,
   execK8sLogin,
   execK8sRemote,
@@ -59,7 +64,7 @@ function selectedAgentNames(agentIds: string[]): string {
     .join(", ");
 }
 
-async function resolveBuildInputs(agentIds?: string[], memoryMB?: number): Promise<{ agentIds: string[]; memoryMB: number; settings: Settings }> {
+async function resolveBuildInputs(agentIds?: string[], memoryMB?: number, k8s?: boolean): Promise<{ agentIds: string[]; memoryMB: number; cpu: string; settings: Settings }> {
   if (!agentIds) {
     printInfo("Select which agents to install in the container image:");
     agentIds = await promptAgentSelection(AGENTS);
@@ -67,7 +72,7 @@ async function resolveBuildInputs(agentIds?: string[], memoryMB?: number): Promi
   }
 
   if (memoryMB === undefined) {
-    const memChoice = await promptSelect("Container memory limit:", [
+    const memChoice = await promptSelect("Memory limit:", [
       { label: "2 GB", value: "2048" },
       { label: "4 GB (recommended)", value: "4096" },
       { label: "6 GB", value: "6144" },
@@ -77,11 +82,27 @@ async function resolveBuildInputs(agentIds?: string[], memoryMB?: number): Promi
     memoryMB = parseInt(memChoice, 10);
   }
 
+  let cpu = "2";
+  if (k8s) {
+    cpu = await promptSelect("CPU limit:", [
+      { label: "1 CPU", value: "1" },
+      { label: "2 CPU (recommended)", value: "2" },
+      { label: "3 CPU", value: "3" },
+      { label: "4 CPU", value: "4" },
+      { label: "8 CPU", value: "8" },
+    ], 1);
+    printInfo(`CPU limit: ${cpu}`);
+  }
+
   const settings = loadSettings();
   settings.memoryMB = memoryMB;
+  if (k8s) {
+    settings.k8s.cpu = cpu;
+    settings.k8s.memory = `${memoryMB / 1024}Gi`;
+  }
   saveSettings(settings);
   printInfo(`Memory limit: ${memoryMB / 1024} GB`);
-  return { agentIds, memoryMB, settings };
+  return { agentIds, memoryMB, cpu, settings };
 }
 
 export async function buildImage(agentIds?: string[], memoryMB?: number): Promise<void> {
@@ -99,10 +120,20 @@ export async function buildImage(agentIds?: string[], memoryMB?: number): Promis
 }
 
 export async function buildK8sImage(overrides: K8sOverrides = {}, agentIds?: string[], memoryMB?: number): Promise<void> {
-  const { agentIds: resolvedAgentIds, memoryMB: resolvedMemoryMB, settings } = await resolveBuildInputs(agentIds, memoryMB);
+  const { agentIds: resolvedAgentIds, memoryMB: resolvedMemoryMB, settings } = await resolveBuildInputs(agentIds, memoryMB, true);
+
+  if (!overrides.registry) {
+    settings.k8s.registry = await promptInput("Image registry", settings.k8s.registry);
+    saveSettings(settings);
+  }
 
   await selectAndExportCerts();
   buildK8sImageRaw(settings, resolvedAgentIds, resolvedMemoryMB, overrides);
+}
+
+export function pushK8sImage(overrides: K8sOverrides = {}): void {
+  const settings = loadSettings();
+  pushK8sImageRaw(settings, overrides);
 }
 
 export async function init(isStartup: boolean = false): Promise<void> {
@@ -284,6 +315,42 @@ export async function runK8sContainer(projectPath: string, overrides: K8sOverrid
   }
 
   const settings = loadSettings();
+
+  if (!k8sPodExists(settings, projectPath, overrides)) {
+    if (!overrides.workspaceSize) {
+      const sizeChoice = await promptSelect("Workspace PVC size:", [
+        { label: "10 Gi", value: "10Gi" },
+        { label: "20 Gi (recommended)", value: "20Gi" },
+        { label: "50 Gi", value: "50Gi" },
+        { label: "100 Gi", value: "100Gi" },
+      ], 1);
+      settings.k8s.workspaceSize = sizeChoice;
+      saveSettings(settings);
+      printInfo(`Workspace size: ${sizeChoice}`);
+    }
+  }
+
+  // Registry auth — offer to create imagePullSecret if registry is set and secret doesn't exist in cluster
+  const registry = overrides.registry ?? settings.k8s.registry;
+  const secretName = settings.k8s.imagePullSecret || "codecontainer-registry";
+  if (registry && !secretExists(settings, secretName, overrides)) {
+    const needsAuth = await promptYesNo("Does your registry require authentication?");
+    if (needsAuth) {
+      printInfo("For Harbor robot accounts, use the full name including robot$ prefix.");
+      const username = await promptInput("Registry username");
+      const password = await promptSecret("Registry password or token");
+      // Docker auth uses just the hostname, not the full repo path
+      const registryHost = registry.split("/")[0];
+      if (!createImagePullSecret(settings, secretName, registryHost, username, password, overrides)) {
+        printError("Failed to create imagePullSecret");
+        process.exit(1);
+      }
+      settings.k8s.imagePullSecret = secretName;
+      saveSettings(settings);
+      printSuccess(`Created imagePullSecret: ${secretName}`);
+    }
+  }
+
   let projectConfig = loadProjectConfig(projectPath);
   if (projectConfig) {
     projectConfig = await confirmProjectConfig(projectConfig, projectPath);
