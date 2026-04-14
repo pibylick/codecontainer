@@ -1,6 +1,6 @@
 {
   "name": "@pibylick/codecontainer",
-  "version": "3.3.4",
+  "version": "3.4.0",
   "description": "Local AI development environment for isolated coding agents in containers with Docker, Podman, and Apple Container",
   "main": "dist/main.js",
   "bin": {
