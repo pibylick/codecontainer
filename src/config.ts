@@ -134,12 +134,14 @@ export function copyConfigs(selectedAgentIds: string[]): void {
 /**
  * Rewrite absolute host home paths to container home (/root) in copied config files.
  * Plugins store installPath / installLocation with the host homedir baked in;
+ * settings.json may reference scripts via absolute host paths (e.g. statusLine command);
  * inside the container these must point to /root instead.
  */
 const CONTAINER_HOME = "/root";
-const PLUGIN_CONFIG_FILES = [
+const HOST_PATH_REWRITE_FILES = [
   "plugins/installed_plugins.json",
   "plugins/known_marketplaces.json",
+  "settings.json",
 ];
 
 function rewriteHostPaths(selectedAgentIds: string[]): void {
@@ -150,7 +152,7 @@ function rewriteHostPaths(selectedAgentIds: string[]): void {
   for (const agent of agents) {
     for (const { dest, isDir } of agent.configSources) {
       if (!isDir) continue;
-      for (const relPath of PLUGIN_CONFIG_FILES) {
+      for (const relPath of HOST_PATH_REWRITE_FILES) {
         const filePath = path.join(CONFIGS_DIR, dest, relPath);
         if (!fs.existsSync(filePath)) continue;
         try {

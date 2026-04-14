@@ -28,7 +28,9 @@ RUN apt-get install -y \
     vim \
     tree \
     tmux \
-    zsh
+    zsh \
+    jq \
+    bc
 
 # Install NVM (Node Version Manager) and Node.js
 ENV NVM_DIR=/root/.nvm
