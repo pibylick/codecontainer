@@ -36,6 +36,7 @@ import {
   saveSettings,
   copyConfigs,
   configsExist,
+  installStatusline,
   type Settings,
 } from "./config";
 import { AGENTS, applyPermissions } from "./agents";
@@ -200,6 +201,20 @@ export async function init(isStartup: boolean = false): Promise<void> {
     printSuccess("Full permissions configured for selected agents");
   }
 
+  // Statusline (Claude Code only)
+  if (selectedAgents.includes("claude")) {
+    printInfo("");
+    printInfo("Enable status line for Claude Code inside the container?");
+    printInfo("Shows git branch, context usage, token counts, and Anthropic usage stats.");
+    printInfo("Requires 'claude login' inside the container for usage stats to work.");
+    const enableStatusline = await promptYesNo("Enable status line?");
+    settings.statusline = enableStatusline;
+    if (enableStatusline) {
+      installStatusline(selectedAgents);
+      printSuccess("Status line scripts installed");
+    }
+  }
+
   printInfo("");
   printInfo("Kubernetes defaults for experimental remote pods:");
   settings.k8s.namespace = await promptInput("Kubernetes namespace", settings.k8s.namespace);
@@ -233,6 +248,9 @@ export async function runContainer(projectPath: string): Promise<void> {
   if (!configsExist(settings.agents)) {
     printInfo("Config files not found. Copying...");
     copyConfigs(settings.agents);
+  }
+  if (settings.statusline) {
+    installStatusline(settings.agents);
   }
 
   if (!imageExists()) {
@@ -458,6 +476,9 @@ export function syncConfigs(): void {
   copyConfigs(settings.agents);
   if (settings.yolo) {
     applyPermissions(settings.agents);
+  }
+  if (settings.statusline) {
+    installStatusline(settings.agents);
   }
   printSuccess("Config files synced successfully");
 }

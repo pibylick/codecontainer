@@ -52,6 +52,8 @@ Stable tracked repo structure (omitting local/generated/ignored directories such
 
 ```
 code-container/
+├── assets/                 # Bundled assets shipped with the package
+│   └── statusline/         # Claude Code status line scripts (cross-platform)
 ├── docs/                   # Supporting documentation and publishable content drafts
 ├── src/                    # TypeScript source code
 ├── scripts/                # Install/migration/cleanup helpers

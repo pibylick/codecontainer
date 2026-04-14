@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "scripts",
+    "assets",
     "Dockerfile",
     "LICENSE"
   ],

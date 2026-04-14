@@ -13,6 +13,7 @@ const SettingsSchema = z.object({
   acceptedTos: z.boolean().default(false),
   agents: z.array(z.enum(ALL_AGENT_IDS as [string, ...string[]])).default(ALL_AGENT_IDS),
   yolo: z.boolean().default(false),
+  statusline: z.boolean().default(false),
   memoryMB: z.number().optional(),
   acceptedProjectConfigs: z.record(z.string(), z.string()).default({}),
   k8s: z.object({
@@ -41,6 +42,7 @@ const DEFAULT_SETTINGS: Settings = {
   acceptedTos: false,
   agents: ALL_AGENT_IDS,
   yolo: false,
+  statusline: false,
   memoryMB: undefined,
   acceptedProjectConfigs: {},
   k8s: {
@@ -129,6 +131,54 @@ export function copyConfigs(selectedAgentIds: string[]): void {
   }
 
   rewriteHostPaths(selectedAgentIds);
+}
+
+/**
+ * Path to bundled statusline assets shipped with the package.
+ */
+const STATUSLINE_ASSETS_DIR = path.resolve(__dirname, "..", "assets", "statusline");
+
+const STATUSLINE_SCRIPTS = ["statusline-command.sh", "statusline-refresh.sh"];
+
+/**
+ * Install statusline scripts into the Claude configs directory.
+ * Only installs for the Claude agent; skips if scripts already exist (preserves user customizations).
+ */
+export function installStatusline(selectedAgentIds: string[]): void {
+  if (!selectedAgentIds.includes("claude")) return;
+
+  const claudeConfigDir = path.join(CONFIGS_DIR, ".claude");
+  if (!fs.existsSync(claudeConfigDir)) {
+    fs.mkdirSync(claudeConfigDir, { recursive: true, mode: 0o700 });
+  }
+
+  for (const script of STATUSLINE_SCRIPTS) {
+    const src = path.join(STATUSLINE_ASSETS_DIR, script);
+    const dest = path.join(claudeConfigDir, script);
+    if (!fs.existsSync(src)) continue;
+    // Always sync from package to pick up updates (same pattern as Dockerfile sync)
+    fs.copyFileSync(src, dest);
+    fs.chmodSync(dest, 0o755);
+  }
+
+  // Configure statusLine.command in settings.json
+  const settingsPath = path.join(claudeConfigDir, "settings.json");
+  const statuslineCmd = "sh /root/.claude/statusline-command.sh";
+
+  let settings: Record<string, unknown> = {};
+  if (fs.existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+    } catch {
+      // Corrupted file — start fresh
+    }
+  }
+
+  const sl = settings.statusLine as Record<string, unknown> | undefined;
+  if (!sl || !sl.command) {
+    settings.statusLine = { ...sl, command: statuslineCmd };
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  }
 }
 
 /**
