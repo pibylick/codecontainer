@@ -16,10 +16,14 @@ chown -R root:root "$SSH_LOCAL" 2>/dev/null
 chmod 700 "$SSH_LOCAL"
 chmod 600 "$SSH_LOCAL"/* 2>/dev/null
 
-# Configure GIT_SSH_COMMAND in shell profiles — matches logic from
-# commands.ts:fixSshOwnership() with multiple identity files and
-# explicit known_hosts path.
-SSH_CMD='export GIT_SSH_COMMAND="ssh -F /dev/null -o IdentityFile=/root/.ssh-local/id_ed25519 -o IdentityFile=/root/.ssh-local/id_rsa -o UserKnownHostsFile=/root/.ssh-local/known_hosts -o StrictHostKeyChecking=no"'
+# Configure GIT_SSH_COMMAND in shell profiles — prefer the user's ssh config
+# (supports custom host aliases like "github-cc" with non-default key names)
+# and fall back to the hardcoded IdentityFile list when no config is present.
+if [ -f "$SSH_LOCAL/config" ]; then
+  SSH_CMD='export GIT_SSH_COMMAND="ssh -F /root/.ssh-local/config -o UserKnownHostsFile=/root/.ssh-local/known_hosts -o StrictHostKeyChecking=no"'
+else
+  SSH_CMD='export GIT_SSH_COMMAND="ssh -F /dev/null -o IdentityFile=/root/.ssh-local/id_ed25519 -o IdentityFile=/root/.ssh-local/id_rsa -o UserKnownHostsFile=/root/.ssh-local/known_hosts -o StrictHostKeyChecking=no"'
+fi
 for profile in /root/.bashrc /root/.zshrc; do
   grep -q "ssh-local" "$profile" 2>/dev/null || echo "$SSH_CMD" >> "$profile"
 done
