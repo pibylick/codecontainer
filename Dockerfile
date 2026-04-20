@@ -28,7 +28,9 @@ RUN apt-get install -y \
     vim \
     tree \
     tmux \
-    zsh
+    zsh \
+    jq \
+    tini
 
 # Install NVM (Node Version Manager) and Node.js
 ENV NVM_DIR=/root/.nvm
@@ -138,5 +140,5 @@ COPY fix-ssh.sh /usr/local/bin/fix-ssh.sh
 COPY codecontainer-entrypoint.sh /usr/local/bin/codecontainer-entrypoint.sh
 RUN chmod +x /usr/local/bin/fix-ssh.sh /usr/local/bin/codecontainer-entrypoint.sh
 
-ENTRYPOINT ["codecontainer-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "codecontainer-entrypoint.sh"]
 CMD ["/bin/bash"]
